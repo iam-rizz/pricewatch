@@ -114,7 +114,7 @@ def run(
         error = f"{type(e).__name__}: {e}"
         # Kirim sekali per jenis error, supaya cron tiap jam tidak spam Telegram
         if state.get("error") != error:
-            notify(f"🚨 <b>Monitoring harga domain gagal</b>\n<code>{escape(error)}</code>")
+            notify(f"🚨 <b>Pengecekan harga domain gagal</b>\n<code>{escape(error)}</code>")
             state["error"] = error
             save_state(cfg.state_file, state)
         return
@@ -134,7 +134,7 @@ def run(
         else:
             parts.append(f"✅ Semua harga jual domain Indonesia ({len(reseller)} TLD) sudah sesuai rumus.")
     if recovered and not parts:
-        parts.append("✅ Monitoring harga domain kembali normal, tidak ada perubahan.")
+        parts.append("✅ Pengecekan harga domain kembali normal. Tidak ada perubahan harga.")
 
     if parts:
         notify("\n\n".join(parts))
