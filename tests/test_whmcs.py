@@ -1,5 +1,6 @@
 import pytest
 
+from pricewatch import whmcs
 from pricewatch.whmcs import WhmcsError, parse_tld_pricing
 
 SAMPLE = {
@@ -38,3 +39,33 @@ def test_parse_harga_minus_satu_berarti_tidak_dijual():
 def test_parse_error_dari_api():
     with pytest.raises(WhmcsError, match="Invalid IP"):
         parse_tld_pricing({"result": "error", "message": "Invalid IP 1.2.3.4"})
+
+
+class FakeResponse:
+    def __init__(self, status, body=None, text=""):
+        self.status_code = status
+        self._body = body
+        self.text = text
+
+    def json(self):
+        if self._body is None:
+            raise ValueError("not json")
+        return self._body
+
+
+def test_fetch_403_json_whmcs_tetap_dibaca_pesannya(monkeypatch):
+    # WHMCS membalas HTTP 403 + JSON untuk Invalid IP / Authentication Failed
+    body = {"result": "error", "message": "Invalid IP 203.0.113.7"}
+    monkeypatch.setattr(whmcs.requests, "post", lambda *a, **k: FakeResponse(403, body))
+    payload = whmcs.fetch_tld_pricing("https://x/includes/api.php", "id", "secret")
+    with pytest.raises(WhmcsError, match="Invalid IP 203.0.113.7"):
+        parse_tld_pricing(payload)
+
+
+def test_fetch_403_bukan_json_lempar_whmcs_error_dengan_status(monkeypatch):
+    # Mis. WAF / ModSecurity membalas halaman HTML
+    monkeypatch.setattr(
+        whmcs.requests, "post", lambda *a, **k: FakeResponse(403, text="<html><title>Access denied</title></html>")
+    )
+    with pytest.raises(WhmcsError, match="HTTP 403.*Access denied"):
+        whmcs.fetch_tld_pricing("https://x/includes/api.php", "id", "secret")
