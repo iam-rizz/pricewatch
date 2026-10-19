@@ -1,0 +1,45 @@
+from decimal import Decimal
+
+import requests
+
+ACTIONS = ("register", "renew", "transfer")
+ONE_YEAR = "1"
+
+
+class WhmcsError(Exception):
+    pass
+
+
+def fetch_tld_pricing(
+    api_url: str, identifier: str, secret: str, currency_id: str | None = None, timeout: float = 30
+) -> dict:
+    data = {
+        "action": "GetTLDPricing",
+        "identifier": identifier,
+        "secret": secret,
+        "responsetype": "json",
+    }
+    if currency_id:
+        data["currencyid"] = currency_id
+    resp = requests.post(api_url, data=data, timeout=timeout)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def parse_tld_pricing(payload: dict) -> dict[str, dict[str, int]]:
+    if payload.get("result") != "success":
+        raise WhmcsError(payload.get("message", "GetTLDPricing gagal tanpa pesan"))
+
+    prices: dict[str, dict[str, int]] = {}
+    for tld, info in payload.get("pricing", {}).items():
+        per_action = {}
+        for action in ACTIONS:
+            raw = (info.get(action) or {}).get(ONE_YEAR)
+            if raw is None:
+                continue
+            value = Decimal(str(raw))
+            if value < 0:
+                continue  # WHMCS pakai -1 untuk "tidak dijual"
+            per_action[action] = int(value)
+        prices[tld.lstrip(".").lower()] = per_action
+    return prices

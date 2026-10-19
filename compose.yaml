@@ -1,0 +1,20 @@
+services:
+  pricewatch:
+    build: .
+    image: ghcr.io/iam-rizz/pricewatch:latest
+    container_name: pricewatch
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Paksa state ke volume, walau .env punya STATE_FILE lain
+      STATE_FILE: /data/state.json
+    volumes:
+      - pricewatch-data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+volumes:
+  pricewatch-data:

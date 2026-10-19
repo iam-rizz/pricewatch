@@ -1,0 +1,86 @@
+import json
+from decimal import Decimal
+
+import pytest
+
+from pricewatch.main import Config, run
+from pricewatch.registra import ScrapeError
+
+RESELLER = {"web.id": {"register": 45_000}, "co.id": {"register": 270_000}}
+SELL_OK = {"web.id": {"register": 52_000}, "co.id": {"register": 308_000}}
+SELL_BAD = {"web.id": {"register": 49_000}, "co.id": {"register": 308_000}}
+
+
+@pytest.fixture
+def cfg(tmp_path):
+    return Config(ppn=Decimal("11"), margin=Decimal("3"), state_file=tmp_path / "state.json")
+
+
+class Sent(list):
+    def __call__(self, text):
+        self.append(text)
+
+
+def go(cfg, reseller=RESELLER, sell=SELL_OK):
+    sent = Sent()
+
+    def fetch_reseller():
+        if isinstance(reseller, Exception):
+            raise reseller
+        return reseller
+
+    run(cfg, fetch_reseller=fetch_reseller, fetch_sell=lambda: sell, notify=sent)
+    return sent
+
+
+def test_run_pertama_kirim_ringkasan(cfg):
+    sent = go(cfg)
+    assert len(sent) == 1
+    assert "sesuai" in sent[0].lower()
+
+
+def test_run_kedua_tanpa_perubahan_diam(cfg):
+    go(cfg)
+    assert go(cfg) == []
+
+
+def test_harga_rugi_dikirim_sekali_saja(cfg):
+    go(cfg)
+    sent = go(cfg, sell=SELL_BAD)
+    assert len(sent) == 1
+    assert "RUGI" in sent[0] and ".web.id" in sent[0]
+    assert go(cfg, sell=SELL_BAD) == []
+
+
+def test_issue_beres_kirim_pemulihan(cfg):
+    go(cfg, sell=SELL_BAD)
+    sent = go(cfg, sell=SELL_OK)
+    assert len(sent) == 1
+    assert "sesuai" in sent[0].lower()
+
+
+def test_perubahan_harga_reseller_dikirim(cfg):
+    go(cfg)
+    naik = {**RESELLER, "web.id": {"register": 47_000}}
+    sent = go(cfg, reseller=naik, sell=SELL_OK)
+    text = "\n".join(sent)
+    assert "45.000" in text and "47.000" in text
+    # harga jual 52.000 → seharusnya 54.000 (47.000 × 1,14 = 53.580)
+    assert "54.000" in text
+
+
+def test_scraper_error_dikirim_sekali_dan_state_reseller_tidak_hilang(cfg):
+    go(cfg)
+    sent = go(cfg, reseller=ScrapeError("Kolom 'Gold Slab' tidak ditemukan"))
+    assert len(sent) == 1 and "Gold Slab" in sent[0]
+    assert go(cfg, reseller=ScrapeError("Kolom 'Gold Slab' tidak ditemukan")) == []
+    state = json.loads(cfg.state_file.read_text())
+    assert state["reseller"] == RESELLER
+
+
+def test_pulih_dari_error_tanpa_perubahan_harga_kirim_info(cfg):
+    go(cfg)
+    go(cfg, reseller=ScrapeError("down"))
+    sent = go(cfg)
+    assert len(sent) == 1
+    assert "normal" in sent[0].lower()
