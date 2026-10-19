@@ -30,6 +30,7 @@ class Config:
     whmcs_currency_id: str | None = None
     telegram_token: str | None = None
     telegram_chat_id: str | None = None
+    telegram_thread_id: str | None = None
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -49,6 +50,7 @@ class Config:
             whmcs_currency_id=os.environ.get("WHMCS_CURRENCY_ID") or None,
             telegram_token=need("TELEGRAM_BOT_TOKEN"),
             telegram_chat_id=need("TELEGRAM_CHAT_ID"),
+            telegram_thread_id=os.environ.get("TELEGRAM_THREAD_ID") or None,
         )
 
 
@@ -172,7 +174,7 @@ def main() -> None:
         if args.dry_run:
             print(text, end="\n\n")
         else:
-            telegram.send_message(cfg.telegram_token, cfg.telegram_chat_id, text)
+            telegram.send_message(cfg.telegram_token, cfg.telegram_chat_id, text, thread_id=cfg.telegram_thread_id)
 
     if args.test_telegram:
         notify("🔔 Tes notifikasi Pricewatch digitalregistra")
