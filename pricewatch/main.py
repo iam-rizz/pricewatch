@@ -5,6 +5,7 @@ import os
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from html import escape
 from pathlib import Path
@@ -189,6 +190,13 @@ def run(
 
     if parts:
         notify("\n\n".join(parts))
+    log.info(
+        "Cek selesai: %d TLD, %d masalah, %d promo, %s",
+        len(reseller),
+        len(alerts),
+        sum(i.kind == "promo" for i in issues),
+        "notifikasi dikirim" if parts else "tidak ada notifikasi",
+    )
     save_state(cfg.state_file, {"reseller": reseller, "issue_keys": issue_keys, "error": None})
 
 
@@ -208,6 +216,8 @@ def run_forever(
         runs += 1
         if max_runs is not None and runs >= max_runs:
             return
+        next_run = datetime.now(timezone.utc) + timedelta(seconds=interval_seconds)
+        log.info("Cek berikutnya sekitar %s UTC", next_run.strftime("%H:%M:%S"))
         sleep(interval_seconds)
 
 
@@ -219,7 +229,9 @@ def main() -> None:
         "--loop", action="store_true", help="cek terus setiap INTERVAL_MINUTES menit (dipakai di Docker)"
     )
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)sZ %(levelname)s %(message)s")
+    # Jam di log selalu UTC, sama dengan jadwal "Cek berikutnya", walaupun TZ host bukan UTC
+    logging.Formatter.converter = time.gmtime
 
     cfg = Config.from_env()
 
