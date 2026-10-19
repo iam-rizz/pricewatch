@@ -75,3 +75,47 @@ def test_reseller_changes_deteksi_naik_turun_baru_hilang():
 
 def test_reseller_changes_run_pertama_kosong():
     assert reseller_changes(None, {"web.id": {"register": 45_000}}) == []
+
+
+PROMO = frozenset({("my.id", "register")})
+
+
+def test_promo_di_bawah_rumus_bukan_rugi():
+    reseller = {"my.id": {"register": 22_000}}
+    sell = {"my.id": {"register": 3_000}}
+    [issue] = find_issues(reseller, sell, PPN, MARGIN, promo=PROMO)
+    assert issue.kind == "promo"
+
+
+def test_promo_kembali_ke_harga_rumus_jadi_promo_ended():
+    reseller = {"my.id": {"register": 22_000}}
+    sell = {"my.id": {"register": 26_000}}
+    [issue] = find_issues(reseller, sell, PPN, MARGIN, promo=PROMO)
+    assert issue.kind == "promo_ended"
+
+
+def test_promo_di_atas_rumus_tetap_mismatch():
+    reseller = {"my.id": {"register": 22_000}}
+    sell = {"my.id": {"register": 30_000}}
+    [issue] = find_issues(reseller, sell, PPN, MARGIN, promo=PROMO)
+    assert issue.kind == "mismatch"
+
+
+def test_promo_hanya_berlaku_untuk_aksi_yang_disebut():
+    reseller = {"my.id": {"register": 22_000, "renew": 22_000}}
+    sell = {"my.id": {"register": 3_000, "renew": 3_000}}
+    kinds = {i.action: i.kind for i in find_issues(reseller, sell, PPN, MARGIN, promo=PROMO)}
+    assert kinds == {"register": "promo", "renew": "loss"}
+
+
+def test_promo_tidak_dijual_tetap_missing():
+    reseller = {"my.id": {"register": 22_000}}
+    [issue] = find_issues(reseller, {}, PPN, MARGIN, promo=PROMO)
+    assert issue.kind == "missing"
+
+
+def test_key_promo_tidak_berubah_saat_harga_promo_berubah():
+    reseller = {"my.id": {"register": 22_000}}
+    [a] = find_issues(reseller, {"my.id": {"register": 3_000}}, PPN, MARGIN, promo=PROMO)
+    [b] = find_issues(reseller, {"my.id": {"register": 5_000}}, PPN, MARGIN, promo=PROMO)
+    assert a.key == b.key

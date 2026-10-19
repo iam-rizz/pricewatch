@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Callable
 
 from pricewatch import registra, telegram, whmcs
-from pricewatch.check import Issue, Prices, find_issues, reseller_changes
+from pricewatch.check import Issue, Prices, Promo, find_issues, reseller_changes
 from pricewatch.pricing import modal
 
 log = logging.getLogger("pricewatch")
@@ -31,6 +31,7 @@ class Config:
     telegram_token: str | None = None
     telegram_chat_id: str | None = None
     telegram_thread_id: str | None = None
+    promo: Promo = frozenset()
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -39,6 +40,11 @@ class Config:
             if not value:
                 sys.exit(f"Variabel {name} belum diisi. Lihat contohnya di .env.example")
             return value
+
+        try:
+            promo = parse_promo(os.environ.get("PROMO"))
+        except ValueError as e:
+            sys.exit(f"PROMO tidak valid: {e}")
 
         return cls(
             ppn=Decimal(os.environ.get("PPN_PERCENT", "11")),
@@ -51,7 +57,27 @@ class Config:
             telegram_token=need("TELEGRAM_BOT_TOKEN"),
             telegram_chat_id=need("TELEGRAM_CHAT_ID"),
             telegram_thread_id=os.environ.get("TELEGRAM_THREAD_ID") or None,
+            promo=promo,
         )
+
+
+def parse_promo(value: str | None) -> Promo:
+    # Format: "my.id:register,biz.id:register"
+    items = set()
+    for raw in (value or "").split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        parts = raw.split(":")
+        if len(parts) != 2:
+            raise ValueError(f"'{raw}' harus berformat tld:aksi, misalnya my.id:register")
+        tld, action = parts[0].strip().lstrip(".").lower(), parts[1].strip().lower()
+        if not tld:
+            raise ValueError(f"'{raw}' tidak punya nama TLD")
+        if action not in whmcs.ACTIONS:
+            raise ValueError(f"aksi '{action}' di '{raw}' harus salah satu dari {', '.join(whmcs.ACTIONS)}")
+        items.add((tld, action))
+    return frozenset(items)
 
 
 def rp(value: int | Decimal) -> str:
@@ -99,6 +125,22 @@ def format_issues(issues: list[Issue], ppn: Decimal) -> str:
     return "\n".join(lines)
 
 
+def format_promo(issues: list[Issue]) -> str:
+    lines = []
+    active = [i for i in issues if i.kind == "promo"]
+    if active:
+        lines.append("🏷️ <b>Promo</b> (tidak dihitung sebagai masalah)")
+        for i in active:
+            lines.append(f"🏷️ .{escape(i.tld)} {i.action}: jual {rp(i.actual)}, harga normal {rp(i.expected)}")
+    for i in issues:
+        if i.kind == "promo_ended":
+            lines.append(
+                f"ℹ️ .{escape(i.tld)} {i.action} sudah kembali ke harga normal {rp(i.expected)}."
+                " Kalau promonya sudah selesai, hapus dari PROMO."
+            )
+    return "\n".join(lines)
+
+
 def run(
     cfg: Config,
     fetch_reseller: Callable[[], Prices],
@@ -122,17 +164,26 @@ def run(
     recovered = state.get("error") is not None
     first_run = state.get("reseller") is None
     changes = reseller_changes(state.get("reseller"), reseller)
-    issues = find_issues(reseller, sell, cfg.ppn, cfg.margin)
+    issues = find_issues(reseller, sell, cfg.ppn, cfg.margin, promo=cfg.promo)
     issue_keys = sorted(i.key for i in issues)
+    alerts = [i for i in issues if i.is_alert]
+    for tld, action in sorted(cfg.promo):
+        if action not in reseller.get(tld, {}):
+            log.warning("PROMO %s:%s tidak ada di tabel digitalregistra, diabaikan", tld, action)
 
     parts = []
     if changes:
         parts.append(format_changes(changes))
     if first_run or changes or issue_keys != state.get("issue_keys"):
-        if issues:
-            parts.append(format_issues(issues, cfg.ppn))
+        if alerts:
+            parts.append(format_issues(alerts, cfg.ppn))
+        elif any(i.kind == "promo" for i in issues):
+            parts.append("✅ Semua harga jual domain Indonesia sudah sesuai rumus, kecuali promo di bawah.")
         else:
             parts.append(f"✅ Semua harga jual domain Indonesia ({len(reseller)} TLD) sudah sesuai rumus.")
+        promo_text = format_promo(issues)
+        if promo_text:
+            parts.append(promo_text)
     if recovered and not parts:
         parts.append("✅ Pengecekan harga domain kembali normal. Tidak ada perubahan harga.")
 

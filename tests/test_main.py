@@ -84,3 +84,38 @@ def test_pulih_dari_error_tanpa_perubahan_harga_kirim_info(cfg):
     sent = go(cfg)
     assert len(sent) == 1
     assert "normal" in sent[0].lower()
+
+
+MY_RESELLER = {"my.id": {"register": 22_000, "renew": 22_000}}
+MY_SELL_PROMO = {"my.id": {"register": 3_000, "renew": 26_000}}
+
+
+@pytest.fixture
+def cfg_promo(tmp_path):
+    return Config(
+        ppn=Decimal("11"),
+        margin=Decimal("3"),
+        state_file=tmp_path / "state.json",
+        promo=frozenset({("my.id", "register")}),
+    )
+
+
+def test_promo_ditampilkan_terpisah_bukan_rugi(cfg_promo):
+    [text] = go(cfg_promo, reseller=MY_RESELLER, sell=MY_SELL_PROMO)
+    assert "RUGI" not in text
+    assert "sesuai" in text
+    assert "🏷️" in text and ".my.id register" in text and "Rp3.000" in text
+
+
+def test_harga_promo_berubah_tidak_kirim_notif(cfg_promo):
+    go(cfg_promo, reseller=MY_RESELLER, sell=MY_SELL_PROMO)
+    lima_ribu = {"my.id": {"register": 5_000, "renew": 26_000}}
+    assert go(cfg_promo, reseller=MY_RESELLER, sell=lima_ribu) == []
+
+
+def test_promo_selesai_kirim_pengingat_sekali(cfg_promo):
+    go(cfg_promo, reseller=MY_RESELLER, sell=MY_SELL_PROMO)
+    normal = {"my.id": {"register": 26_000, "renew": 26_000}}
+    [text] = go(cfg_promo, reseller=MY_RESELLER, sell=normal)
+    assert "PROMO" in text and ".my.id register" in text
+    assert go(cfg_promo, reseller=MY_RESELLER, sell=normal) == []
