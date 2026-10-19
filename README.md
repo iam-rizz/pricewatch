@@ -121,6 +121,28 @@ URL API WHMCS adalah URL instalasi WHMCS ditambah `/includes/api.php`. Contoh:
    ```
    Cari `"chat":{"id": ...}`. Chat ID grup biasanya negatif, misalnya `-1001234567890`.
 
+#### Grup forum (topik)
+
+Supaya notif masuk ke topik tertentu, bukan ke *General*, isi juga `TELEGRAM_THREAD_ID`.
+Paling mudah lewat link topik. Di aplikasi Telegram, klik kanan nama topik → **Copy Link**:
+
+```
+https://t.me/c/3658699335/215082
+              └────┬────┘ └──┬──┘
+            chat (tambahkan   ID topik
+            prefix -100)
+```
+
+```env
+TELEGRAM_CHAT_ID=-1003658699335
+TELEGRAM_THREAD_ID=215082
+```
+
+> Link sebuah **pesan** di dalam topik bentuknya `t.me/c/<chat>/<topik>/<pesan>`, yang dipakai angka
+> tengahnya. Kalau link-nya hanya berisi satu angka setelah chat, pastikan itu link **topik** (Copy Link
+> dari nama topik), bukan link pesan biasa. Bot harus menjadi anggota grup, dan kalau topiknya
+> dikunci, bot harus admin.
+
 ### 3. Siapkan server
 
 Install Docker (kalau belum ada):
@@ -223,6 +245,7 @@ container tetap hidup dan mencoba lagi di jadwal berikutnya.
 | `WHMCS_CURRENCY_ID` | | mata uang default WHMCS | ID mata uang (IDR) kalau WHMCS punya banyak mata uang |
 | `TELEGRAM_BOT_TOKEN` | ✅ | | Token dari @BotFather |
 | `TELEGRAM_CHAT_ID` | ✅ | | Chat ID pribadi / grup |
+| `TELEGRAM_THREAD_ID` | | | ID topik untuk grup forum (kosong = General / chat biasa) |
 | `PPN_PERCENT` | | `11` | PPN dalam persen |
 | `MARGIN_PERCENT` | | `3` | Margin dalam persen |
 | `INTERVAL_MINUTES` | | `360` | Interval pengecekan (mode `--loop` / Docker) |
@@ -248,6 +271,8 @@ Opsi CLI:
 | 🚨 `ScrapeError: ...` | Struktur halaman digitalregistra berubah, perlu update parser di `pricewatch/registra.py` |
 | `--test-telegram` error `400 chat not found` | `TELEGRAM_CHAT_ID` salah, atau bot belum pernah di-chat / belum masuk grup |
 | `401 Unauthorized` dari Telegram | `TELEGRAM_BOT_TOKEN` salah |
+| `TelegramError: ... message thread not found` | `TELEGRAM_THREAD_ID` salah, atau yang diambil ID pesan, bukan ID topik |
+| `TelegramError: ... not enough rights` | Topik dikunci, jadikan bot admin grup |
 | Semua TLD ⚪ | TLD belum ada di WHMCS, atau mata uang salah (`WHMCS_CURRENCY_ID`) |
 | Tidak ada notif sama sekali | Normal kalau tidak ada perubahan. Cek `docker compose logs` |
 | `docker compose pull` ditolak (denied) | Package GHCR masih private. Buat jadi public di GitHub, atau pakai `--build` |
