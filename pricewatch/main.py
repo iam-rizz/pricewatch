@@ -164,7 +164,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Cocokkan harga reseller digitalregistra dengan harga jual di WHMCS")
     parser.add_argument("--dry-run", action="store_true", help="cetak pesan ke terminal tanpa mengirim ke Telegram")
     parser.add_argument("--test-telegram", action="store_true", help="kirim pesan tes ke Telegram, lalu keluar")
-    parser.add_argument("--loop", action="store_true", help="cek terus setiap INTERVAL_MINUTES menit (dipakai di Docker)")
+    parser.add_argument(
+        "--loop", action="store_true", help="cek terus setiap INTERVAL_MINUTES menit (dipakai di Docker)"
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
