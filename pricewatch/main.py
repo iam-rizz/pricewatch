@@ -5,17 +5,40 @@ import os
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from decimal import Decimal
 from html import escape
 from pathlib import Path
 from typing import Callable
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pricewatch import registra, telegram, whmcs
 from pricewatch.check import Issue, Prices, Promo, find_issues, reseller_changes
 from pricewatch.pricing import modal
 
 log = logging.getLogger("pricewatch")
+
+DEFAULT_TZ = "Asia/Jakarta"
+
+
+def local_tz() -> tzinfo:
+    name = os.environ.get("TZ") or DEFAULT_TZ
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        log.warning("Zona waktu TZ=%s tidak dikenal, log memakai UTC", name)
+        return timezone.utc
+
+
+class LocalFormatter(logging.Formatter):
+    # Pakai zoneinfo, bukan time.localtime, supaya hasilnya sama di host maupun container
+    # dan tidak bergantung pada database zona waktu di sistem
+    def __init__(self, fmt: str, tz: tzinfo):
+        super().__init__(fmt)
+        self.tz = tz
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        return datetime.fromtimestamp(record.created, self.tz).strftime(datefmt or "%Y-%m-%d %H:%M:%S %Z")
 
 KIND_ORDER = {"loss": 0, "mismatch": 1, "missing": 2}
 
@@ -205,6 +228,7 @@ def run_forever(
     interval_seconds: float,
     sleep: Callable[[float], None] = time.sleep,
     max_runs: int | None = None,
+    tz: tzinfo = timezone.utc,
 ) -> None:
     runs = 0
     while True:
@@ -216,8 +240,8 @@ def run_forever(
         runs += 1
         if max_runs is not None and runs >= max_runs:
             return
-        next_run = datetime.now(timezone.utc) + timedelta(seconds=interval_seconds)
-        log.info("Cek berikutnya sekitar %s UTC", next_run.strftime("%H:%M:%S"))
+        next_run = datetime.now(tz) + timedelta(seconds=interval_seconds)
+        log.info("Cek berikutnya sekitar %s", next_run.strftime("%H:%M:%S %Z"))
         sleep(interval_seconds)
 
 
@@ -229,9 +253,10 @@ def main() -> None:
         "--loop", action="store_true", help="cek terus setiap INTERVAL_MINUTES menit (dipakai di Docker)"
     )
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)sZ %(levelname)s %(message)s")
-    # Jam di log selalu UTC, sama dengan jadwal "Cek berikutnya", walaupun TZ host bukan UTC
-    logging.Formatter.converter = time.gmtime
+    tz = local_tz()
+    handler = logging.StreamHandler()
+    handler.setFormatter(LocalFormatter("%(asctime)s %(levelname)s %(message)s", tz=tz))
+    logging.basicConfig(level=logging.INFO, handlers=[handler])
 
     cfg = Config.from_env()
 
@@ -262,7 +287,7 @@ def main() -> None:
     if args.loop:
         minutes = float(os.environ.get("INTERVAL_MINUTES", "360"))
         log.info("Mode loop: cek setiap %s menit", minutes)
-        run_forever(job, interval_seconds=minutes * 60)
+        run_forever(job, interval_seconds=minutes * 60, tz=tz)
     else:
         job()
 

@@ -1,3 +1,5 @@
+from zoneinfo import ZoneInfo
+
 from pricewatch.main import run_forever
 
 
@@ -25,3 +27,10 @@ def test_run_forever_log_jadwal_berikutnya(caplog):
     run_forever(lambda: None, interval_seconds=600, sleep=lambda _: None, max_runs=2)
     nexts = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Cek berikutnya")]
     assert len(nexts) == 1 and "UTC" in nexts[0]
+
+
+def test_run_forever_log_jadwal_pakai_zona_waktu(caplog):
+    caplog.set_level("INFO", logger="pricewatch")
+    run_forever(lambda: None, interval_seconds=60, sleep=lambda _: None, max_runs=2, tz=ZoneInfo("Asia/Jakarta"))
+    [msg] = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Cek berikutnya")]
+    assert msg.endswith("WIB")
