@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      # Paksa state ke volume, walau .env punya STATE_FILE lain
+      # State selalu disimpan di volume, walaupun .env berisi STATE_FILE lain
       STATE_FILE: /data/state.json
     volumes:
       - pricewatch-data:/data

@@ -54,7 +54,7 @@ class FakeResponse:
 
 
 def test_fetch_403_json_whmcs_tetap_dibaca_pesannya(monkeypatch):
-    # WHMCS membalas HTTP 403 + JSON untuk Invalid IP / Authentication Failed
+    # Untuk Invalid IP atau kredensial salah, WHMCS membalas HTTP 403 berisi JSON
     body = {"result": "error", "message": "Invalid IP 203.0.113.7"}
     monkeypatch.setattr(whmcs.requests, "post", lambda *a, **k: FakeResponse(403, body))
     payload = whmcs.fetch_tld_pricing("https://x/includes/api.php", "id", "secret")
@@ -63,7 +63,7 @@ def test_fetch_403_json_whmcs_tetap_dibaca_pesannya(monkeypatch):
 
 
 def test_fetch_403_bukan_json_lempar_whmcs_error_dengan_status(monkeypatch):
-    # Mis. WAF / ModSecurity membalas halaman HTML
+    # Misalnya WAF atau ModSecurity yang membalas dengan halaman HTML
     monkeypatch.setattr(
         whmcs.requests, "post", lambda *a, **k: FakeResponse(403, text="<html><title>Access denied</title></html>")
     )

@@ -22,8 +22,8 @@ def fetch_tld_pricing(
     if currency_id:
         data["currencyid"] = currency_id
     resp = requests.post(api_url, data=data, timeout=timeout)
-    # WHMCS membalas 403 + JSON untuk Invalid IP / Authentication Failed;
-    # raise_for_status() akan membuang pesan itu, jadi baca JSON dulu
+    # Untuk Invalid IP atau kredensial salah, WHMCS membalas HTTP 403 berisi JSON.
+    # raise_for_status() akan membuang pesan itu, jadi JSON-nya dibaca dulu
     try:
         payload = resp.json()
     except ValueError:
@@ -36,7 +36,7 @@ def fetch_tld_pricing(
 
 def parse_tld_pricing(payload: dict) -> dict[str, dict[str, int]]:
     if payload.get("result") != "success":
-        raise WhmcsError(payload.get("message", "GetTLDPricing gagal tanpa pesan"))
+        raise WhmcsError(payload.get("message", "GetTLDPricing gagal tanpa pesan error"))
 
     prices: dict[str, dict[str, int]] = {}
     for tld, info in payload.get("pricing", {}).items():
@@ -47,7 +47,7 @@ def parse_tld_pricing(payload: dict) -> dict[str, dict[str, int]]:
                 continue
             value = Decimal(str(raw))
             if value < 0:
-                continue  # WHMCS pakai -1 untuk "tidak dijual"
+                continue  # -1 di WHMCS berarti aksi ini tidak dijual
             per_action[action] = int(value)
         prices[tld.lstrip(".").lower()] = per_action
     return prices

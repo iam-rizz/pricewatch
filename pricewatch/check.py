@@ -22,7 +22,7 @@ class Issue:
 
 def find_issues(reseller: Prices, sell: Prices, ppn: Decimal, margin: Decimal) -> list[Issue]:
     issues = []
-    # Hanya TLD yang ada di digitalregistra (domain Indonesia); TLD lain di WHMCS diabaikan
+    # Daftar TLD diambil dari tabel digitalregistra, jadi TLD lain di WHMCS (.com dan seterusnya) tidak dicek
     for tld in sorted(reseller):
         for action, base in reseller[tld].items():
             expected = harga_jual(base, ppn, margin)
