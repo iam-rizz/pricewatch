@@ -37,7 +37,7 @@ class Config:
         def need(name: str) -> str:
             value = os.environ.get(name)
             if not value:
-                sys.exit(f"Env {name} belum di-set (lihat .env.example)")
+                sys.exit(f"Variabel {name} belum diisi. Lihat contohnya di .env.example")
             return value
 
         return cls(
@@ -110,11 +110,11 @@ def run(
         reseller = fetch_reseller()
         sell = fetch_sell()
     except Exception as e:
-        log.exception("Gagal ambil data harga")
+        log.exception("Gagal mengambil data harga")
         error = f"{type(e).__name__}: {e}"
-        # Kirim sekali per jenis error, supaya cron tiap jam tidak spam Telegram
+        # Error yang sama hanya dikirim sekali. Tanpa ini, setiap run mengirim pesan yang sama ke Telegram
         if state.get("error") != error:
-            notify(f"🚨 <b>Monitoring harga domain gagal</b>\n<code>{escape(error)}</code>")
+            notify(f"🚨 <b>Pengecekan harga domain gagal</b>\n<code>{escape(error)}</code>")
             state["error"] = error
             save_state(cfg.state_file, state)
         return
@@ -134,7 +134,7 @@ def run(
         else:
             parts.append(f"✅ Semua harga jual domain Indonesia ({len(reseller)} TLD) sudah sesuai rumus.")
     if recovered and not parts:
-        parts.append("✅ Monitoring harga domain kembali normal, tidak ada perubahan.")
+        parts.append("✅ Pengecekan harga domain kembali normal. Tidak ada perubahan harga.")
 
     if parts:
         notify("\n\n".join(parts))
@@ -152,8 +152,8 @@ def run_forever(
         try:
             job()
         except Exception:
-            # Satu run gagal (mis. Telegram down) jangan matikan container; coba lagi run berikutnya
-            log.exception("Run gagal, lanjut ke jadwal berikutnya")
+            # Error di satu run, misalnya Telegram sedang down, tidak boleh mematikan container
+            log.exception("Pengecekan gagal, dicoba lagi di jadwal berikutnya")
         runs += 1
         if max_runs is not None and runs >= max_runs:
             return
@@ -161,10 +161,12 @@ def run_forever(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Pantau harga reseller digitalregistra vs harga jual WHMCS")
-    parser.add_argument("--dry-run", action="store_true", help="cetak pesan ke terminal, tidak kirim Telegram")
-    parser.add_argument("--test-telegram", action="store_true", help="kirim pesan tes ke Telegram lalu keluar")
-    parser.add_argument("--loop", action="store_true", help="jalan terus tiap INTERVAL_MINUTES (untuk Docker)")
+    parser = argparse.ArgumentParser(description="Cocokkan harga reseller digitalregistra dengan harga jual di WHMCS")
+    parser.add_argument("--dry-run", action="store_true", help="cetak pesan ke terminal tanpa mengirim ke Telegram")
+    parser.add_argument("--test-telegram", action="store_true", help="kirim pesan tes ke Telegram, lalu keluar")
+    parser.add_argument(
+        "--loop", action="store_true", help="cek terus setiap INTERVAL_MINUTES menit (dipakai di Docker)"
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -196,7 +198,7 @@ def main() -> None:
 
     if args.loop:
         minutes = float(os.environ.get("INTERVAL_MINUTES", "360"))
-        log.info("Mode loop, cek tiap %s menit", minutes)
+        log.info("Mode loop: cek setiap %s menit", minutes)
         run_forever(job, interval_seconds=minutes * 60)
     else:
         job()

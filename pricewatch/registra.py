@@ -30,9 +30,10 @@ def parse_gold_slab(html: str) -> dict[str, dict[str, int]]:
 
     rows = table.find_all("tr")
     if len(rows) < 3:
-        raise ScrapeError("Struktur tabel harga berubah (baris header kurang)")
+        raise ScrapeError("Struktur tabel harga berubah: jumlah baris header kurang")
 
-    # Header row 1: "Ekstensi" (rowspan 2) lalu tiap slab colspan 3 → hitung offset kolom slab
+    # Baris header pertama berisi "Ekstensi" (rowspan 2), lalu tiap slab dengan colspan 3.
+    # Dari colspan itu dihitung kolom tempat slab Gold dimulai
     col = 1
     gold_start = None
     for th in rows[0].find_all("th")[1:]:
@@ -53,10 +54,10 @@ def parse_gold_slab(html: str) -> dict[str, dict[str, int]]:
         cells = tr.find_all("td")
         name = cells[0].get_text(strip=True) if cells else ""
         if not name.startswith("."):
-            continue  # baris Deposit/Transaksi dsb.
+            continue  # baris non-TLD seperti Deposit/Transaksi
         values = cells[gold_start : gold_start + len(ACTIONS)]
         if len(values) != len(ACTIONS):
-            raise ScrapeError(f"Baris {name} kolomnya kurang")
+            raise ScrapeError(f"Jumlah kolom di baris {name} kurang")
         try:
             prices[name.lstrip(".").lower()] = {
                 action: _to_int(td.get_text()) for action, td in zip(ACTIONS, values)

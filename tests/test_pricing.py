@@ -11,6 +11,11 @@ def test_harga_jual_bulat_pas_ribuan_tidak_naik():
     assert harga_jual(200_000, PPN, MARGIN) == 228_000
 
 
+def test_harga_jual_tidak_kena_float_drift():
+    # float: 50000 * (1 + 0.11 + 0.03) = 57000.00000000001 → ceil jadi 58.000
+    assert harga_jual(50_000, PPN, MARGIN) == 57_000
+
+
 def test_harga_jual_dibulatkan_ke_atas_ribuan():
     # 45.000 × 1,14 = 51.300 → 52.000
     assert harga_jual(45_000, PPN, MARGIN) == 52_000
