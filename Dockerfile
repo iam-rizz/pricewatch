@@ -7,7 +7,7 @@ LABEL org.opencontainers.image.source="https://github.com/iam-rizz/pricewatch" \
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    TZ=UTC \
+    TZ=Asia/Jakarta \
     STATE_FILE=/data/state.json
 
 WORKDIR /app

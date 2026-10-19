@@ -239,7 +239,15 @@ Ringkasan pertama (✅ atau ⚠️) masuk ke Telegram beberapa detik setelah con
 | Reset state (notif ulang dari awal) | `docker compose down -v && docker compose up -d` |
 | Stop | `docker compose down` |
 
-Log dibatasi tiga file masing-masing 5 MB. Kalau satu pengecekan gagal, misalnya karena Telegram
+Setiap pengecekan menulis satu baris ringkasan, dan mode loop mencatat jam pengecekan berikutnya:
+
+```
+2026-10-20 02:04:59 WIB INFO Cek selesai: 9 TLD, 2 masalah, 2 promo, notifikasi dikirim
+2026-10-20 02:04:59 WIB INFO Cek berikutnya sekitar 02:14:59 WIB
+```
+
+Kalau baris `Cek selesai` tidak muncul lagi setelah jam yang tertulis di `Cek berikutnya`, berarti
+loop-nya macet. Log dibatasi tiga file masing-masing 5 MB. Kalau satu pengecekan gagal, misalnya karena Telegram
 sedang down, container tetap jalan dan mencoba lagi di jadwal berikutnya.
 
 ## Konfigurasi
@@ -256,6 +264,7 @@ sedang down, container tetap jalan dan mencoba lagi di jadwal berikutnya.
 | `PPN_PERCENT` | | `11` | PPN dalam persen |
 | `MARGIN_PERCENT` | | `3` | Margin dalam persen |
 | `PROMO` | | | Item promo yang tidak dihitung sebagai masalah, misalnya `my.id:register,biz.id:register`. Lihat [Harga promo](#harga-promo) |
+| `TZ` | | `Asia/Jakarta` | Zona waktu jam di log, dengan nama IANA seperti `Asia/Makassar` atau `UTC` |
 | `INTERVAL_MINUTES` | | `360` | Jarak antar-pengecekan dalam menit, untuk mode `--loop` dan Docker |
 | `STATE_FILE` | | `/data/state.json` di Docker | Hanya dipakai saat jalan tanpa Docker |
 

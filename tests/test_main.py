@@ -119,3 +119,21 @@ def test_promo_selesai_kirim_pengingat_sekali(cfg_promo):
     [text] = go(cfg_promo, reseller=MY_RESELLER, sell=normal)
     assert "PROMO" in text and ".my.id register" in text
     assert go(cfg_promo, reseller=MY_RESELLER, sell=normal) == []
+
+
+def test_setiap_run_menulis_log_ringkasan(cfg, caplog):
+    caplog.set_level("INFO", logger="pricewatch")
+    go(cfg)
+    go(cfg)
+    summaries = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Cek selesai")]
+    assert len(summaries) == 2
+    assert "2 TLD" in summaries[0] and "0 masalah" in summaries[0] and "notifikasi dikirim" in summaries[0]
+    assert "tidak ada notifikasi" in summaries[1]
+
+
+def test_log_ringkasan_hitung_masalah_dan_promo(cfg_promo, caplog):
+    caplog.set_level("INFO", logger="pricewatch")
+    sell = {"my.id": {"register": 3_000, "renew": 25_000}}
+    go(cfg_promo, reseller=MY_RESELLER, sell=sell)
+    [summary] = [r.getMessage() for r in caplog.records if r.getMessage().startswith("Cek selesai")]
+    assert "1 masalah" in summary and "1 promo" in summary
