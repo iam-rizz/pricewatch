@@ -4,11 +4,14 @@ from decimal import Decimal
 from pricewatch.pricing import harga_jual, modal
 
 Prices = dict[str, dict[str, int]]
+Promo = frozenset[tuple[str, str]]
+
+INFO_KINDS = frozenset({"promo", "promo_ended"})
 
 
 @dataclass(frozen=True)
 class Issue:
-    kind: str  # "loss" | "mismatch" | "missing"
+    kind: str  # "loss" | "mismatch" | "missing" | "promo" | "promo_ended"
     tld: str
     action: str | None
     reseller: int
@@ -17,10 +20,19 @@ class Issue:
 
     @property
     def key(self) -> str:
+        if self.kind in INFO_KINDS:
+            # Harga promo boleh naik-turun tanpa memicu notifikasi baru
+            return f"{self.kind}:{self.tld}:{self.action}"
         return f"{self.kind}:{self.tld}:{self.action}:{self.reseller}:{self.actual}"
 
+    @property
+    def is_alert(self) -> bool:
+        return self.kind not in INFO_KINDS
 
-def find_issues(reseller: Prices, sell: Prices, ppn: Decimal, margin: Decimal) -> list[Issue]:
+
+def find_issues(
+    reseller: Prices, sell: Prices, ppn: Decimal, margin: Decimal, promo: Promo = frozenset()
+) -> list[Issue]:
     issues = []
     # Daftar TLD diambil dari tabel digitalregistra, jadi TLD lain di WHMCS (.com dan seterusnya) tidak dicek
     for tld in sorted(reseller):
@@ -29,6 +41,9 @@ def find_issues(reseller: Prices, sell: Prices, ppn: Decimal, margin: Decimal) -
             actual = sell.get(tld, {}).get(action)
             if actual is None:
                 kind = "missing"
+            elif (tld, action) in promo and actual <= expected:
+                # Di bawah rumus berarti promo masih jalan; sama dengan rumus berarti promo sudah selesai
+                kind = "promo" if actual < expected else "promo_ended"
             elif actual < modal(base, ppn):
                 kind = "loss"
             elif actual != expected:

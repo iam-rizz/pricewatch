@@ -62,6 +62,20 @@ dan dibulatkan ke 229.000, padahal seharusnya 228.000.
 
 Masalah yang sama hanya dikirim sekali. Pesan berikutnya baru dikirim kalau kondisinya berubah.
 
+### Harga promo
+
+Harga promo yang sengaja dipasang di bawah modal akan terus dilaporkan sebagai RUGI. Untuk mencegahnya,
+daftarkan item promo di `PROMO` dengan format `tld:aksi`, dipisah koma:
+
+```env
+PROMO=my.id:register,biz.id:register
+```
+
+Selama harga jualnya di bawah harga rumus, item itu masuk ke bagian 🏷️ Promo dan perubahan harga
+promonya tidak memicu notifikasi. Begitu harganya kembali sesuai rumus, Pricewatch mengirim pengingat
+sekali untuk menghapusnya dari `PROMO`. Kalau harganya malah di atas rumus, item itu tetap dilaporkan
+sebagai 🟡. Aksi lain di TLD yang sama, misalnya renew .my.id, tetap dicek seperti biasa.
+
 ## Notifikasi
 
 | Ikon | Kejadian |
@@ -70,6 +84,8 @@ Masalah yang sama hanya dikirim sekali. Pesan berikutnya baru dikirim kalau kond
 | 🔴 RUGI | Harga jual di bawah modal (reseller + PPN) |
 | 🟡 | Harga jual tidak sama dengan hasil rumus |
 | ⚪ | TLD atau aksi (register, renew, transfer) tidak dijual di WHMCS |
+| 🏷️ | Item di `PROMO` yang dijual di bawah harga rumus. Hanya ditampilkan, tidak memicu notifikasi sendiri |
+| ℹ️ | Item di `PROMO` yang harganya sudah kembali sesuai rumus. Dikirim sekali sebagai pengingat untuk menghapusnya dari `PROMO` |
 | ✅ | Semua harga sesuai. Dikirim saat run pertama dan saat masalah sebelumnya sudah beres |
 | 🚨 | Pengambilan data gagal, misalnya struktur tabel digitalregistra berubah atau kredensial WHMCS salah |
 
@@ -239,6 +255,7 @@ sedang down, container tetap jalan dan mencoba lagi di jadwal berikutnya.
 | `TELEGRAM_THREAD_ID` | | | ID topik di grup forum. Kosongkan untuk chat biasa atau topik General |
 | `PPN_PERCENT` | | `11` | PPN dalam persen |
 | `MARGIN_PERCENT` | | `3` | Margin dalam persen |
+| `PROMO` | | | Item promo yang tidak dihitung sebagai masalah, misalnya `my.id:register,biz.id:register`. Lihat [Harga promo](#harga-promo) |
 | `INTERVAL_MINUTES` | | `360` | Jarak antar-pengecekan dalam menit, untuk mode `--loop` dan Docker |
 | `STATE_FILE` | | `/data/state.json` di Docker | Hanya dipakai saat jalan tanpa Docker |
 
