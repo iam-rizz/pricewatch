@@ -97,7 +97,8 @@ def test_kurs_efektif_berubah_dikirim(cfg):
 
 
 def test_kurs_live_bolak_balik_di_batas_hanya_sekali_notif(cfg):
-    sell = {**ID_SELL, "com": {"register": 254_500, "renew": 254_500}}  # sesuai kurs 19.000
+    # 11,75 × 19.000 × 1,14 = 254.505 → 255.000, sesuai kurs 19.000
+    sell = {**ID_SELL, "com": {"register": 255_000, "renew": 255_000}}
     go(cfg, sell=sell, rate="18499.9")
     assert len(go(cfg, sell=sell, rate="18500.1")) == 1  # naik ke 19.000
     for live in ("18499.9", "18500.1", "18499.9"):
@@ -176,9 +177,28 @@ def test_fetch_gtld_tanpa_fetch_rate_ditolak(cfg):
         run(cfg, fetch_reseller=lambda: ID_RESELLER, fetch_sell=lambda: SELL_OK, notify=print, fetch_gtld=lambda: GTLD)
 
 
-def test_default_kurs_dibulatkan_ke_100(tmp_path):
-    cfg = Config(ppn=Decimal("11"), margin=Decimal("3"), state_file=tmp_path / "state.json")
-    # 11,75 × 18.100 × 1,14 = 242.452,5 → 242.500
-    sell = {**ID_SELL, "com": {"register": 242_500, "renew": 242_500}}
-    [text] = go(cfg, sell=sell)
-    assert "✅" in text and "Rp18.100" in text and "kelipatan Rp100" in text
+@pytest.fixture
+def cfg_live(tmp_path):
+    return Config(ppn=Decimal("11"), margin=Decimal("3"), state_file=tmp_path / "state.json")
+
+
+# Kurs live 18.055,12 → 18.056: 11,75 × 18.056 × 1,14 = 241.858,1 → 242.000
+SELL_LIVE = {**ID_SELL, "com": {"register": 242_000, "renew": 242_000}}
+
+
+def test_default_kurs_ikut_live_dibulatkan_ke_rupiah(cfg_live):
+    [text] = go(cfg_live, sell=SELL_LIVE)
+    assert "✅" in text and "Rp18.056" in text and "kurs live" in text and "kelipatan" not in text
+
+
+def test_kurs_bergerak_tanpa_mengubah_status_tidak_kirim_notif(cfg_live):
+    go(cfg_live, sell=SELL_LIVE)
+    # 18.057: 11,75 × 18.057 × 1,14 = 241.871,5 → tetap 242.000
+    assert go(cfg_live, sell=SELL_LIVE, rate="18056.50") == []
+
+
+def test_kurs_bergerak_mengubah_harga_seharusnya_kirim_notif(cfg_live):
+    go(cfg_live, sell=SELL_LIVE)
+    # 18.100: 11,75 × 18.100 × 1,14 = 242.452,5 → 242.500, harga 242.000 jadi 🟡
+    text = "\n".join(go(cfg_live, sell=SELL_LIVE, rate="18099.40"))
+    assert "🟡 .com" in text and "Rp242.500" in text and "Rp18.056" in text and "Rp18.100" in text

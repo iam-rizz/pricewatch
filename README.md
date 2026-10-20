@@ -89,23 +89,25 @@ sebagai 🟡. Aksi lain di TLD yang sama, misalnya renew .my.id, tetap dicek sep
 Harga gTLD di digitalregistra dalam USD. Pricewatch menghitungnya seperti ini:
 
 ```
-kurs efektif = ROUNDUP(kurs live, ke kelipatan Rp100)
-harga jual   = ROUNDUP(USD × kurs efektif × (1 + PPN + margin), ke kelipatan Rp500)
-modal        = USD × kurs live × (1 + PPN)
+kurs        = kurs live, dibulatkan ke atas ke rupiah
+harga jual  = ROUNDUP(USD × kurs × (1 + PPN + margin), ke kelipatan Rp500)
+modal       = USD × kurs live × (1 + PPN)
 ```
 
-Kurs live diambil dari [open.er-api.com](https://open.er-api.com), yang diperbarui sekali sehari.
-Kurs itu dibulatkan ke atas supaya harga seharusnya tidak berubah setiap hari: harga baru bergeser kalau
-kurs melewati kelipatan Rp100, misalnya dari 18.090 ke 18.110. Selisih kurs efektif dengan kurs live
-paling banyak Rp100, sekitar 0,5%. Kelipatannya bisa diubah dengan `USD_RATE_ROUND_TO`; isi `1` untuk
-mengikuti kurs live hampir persis, dengan konsekuensi harga seharusnya bisa bergeser setiap hari. Modal tetap dihitung dengan kurs live, supaya status RUGI hanya muncul kalau Anda memang rugi
-dengan kurs hari itu.
+Kurs live diambil dari [open.er-api.com](https://open.er-api.com), yang diperbarui sekali sehari. Karena
+kurs bergerak setiap hari, harga seharusnya ikut bergeser. Pembulatan harga jual ke Rp500 menahan
+sebagian besar pergeseran kecil, tapi harga yang dekat batas kelipatan akan sesekali berpindah. Modal
+dihitung dengan kurs live, jadi status RUGI hanya muncul kalau Anda memang rugi dengan kurs hari itu.
 
-Kurs efektif naik begitu kurs live melewatinya, tapi baru turun kalau kurs live sudah turun satu
-kelipatan penuh ditambah seperlima kelipatan (Rp120 untuk kelipatan Rp100). Misalnya kurs efektif
-18.200 baru turun ke 18.100 setelah kurs live mencapai 18.080 atau lebih rendah. Dengan begitu, kurs live yang bergerak di sekitar batas kelipatan
-tidak membuat harga seharusnya bolak-balik setiap hari. Kalau kurs efektif berubah, Pricewatch
-mengirim 💱 bersama daftar harga yang perlu disesuaikan.
+Perubahan kurs saja tidak memicu notifikasi. Pesan baru dikirim kalau status harga berubah, misalnya
+harga yang tadinya sesuai menjadi 🟡 karena kurs naik. Kurs yang dipakai selalu ditampilkan di baris 💱,
+termasuk kurs sebelumnya kalau berubah.
+
+Kalau harga seharusnya terlalu sering bergeser, bulatkan kurs ke kelipatan yang lebih besar dengan
+`USD_RATE_ROUND_TO`, misalnya `100`. Kurs lalu dibulatkan ke atas ke kelipatan itu dan baru turun setelah
+kurs live turun satu kelipatan ditambah seperlimanya. Dengan `100`, kurs 18.200 baru turun ke 18.100
+setelah kurs live mencapai 18.080 atau lebih rendah. Harga jual jadi sedikit lebih tinggi, paling banyak
+sekitar 0,5% untuk kelipatan Rp100.
 
 Kalau halaman gTLD atau layanan kurs gagal diakses, domain .id tetap dicek seperti biasa dan Pricewatch
 mengirim 🚨 khusus gTLD sekali.
@@ -126,7 +128,7 @@ Pengecekan gTLD bisa dimatikan dengan `GTLD_ENABLED=false`.
 | ⚪ | TLD atau aksi (register, renew, transfer) tidak dijual di WHMCS |
 | 🏷️ | Item di `PROMO` yang dijual di bawah harga rumus. Hanya ditampilkan, tidak memicu notifikasi sendiri |
 | ℹ️ | Item di `PROMO` yang harganya sudah kembali sesuai rumus. Dikirim sekali sebagai pengingat untuk menghapusnya dari `PROMO` |
-| 💱 | Kurs efektif USD ke IDR berubah, disertai daftar harga gTLD yang perlu disesuaikan |
+| 💱 | Kurs USD ke IDR yang dipakai untuk gTLD, termasuk kurs sebelumnya kalau berubah. Muncul di pesan yang memuat gTLD, bukan pemicu notifikasi sendiri |
 | ✅ | Semua harga sesuai. Dikirim saat run pertama dan saat masalah sebelumnya sudah beres |
 | 🚨 | Pengambilan data gagal, misalnya struktur tabel digitalregistra berubah, open.er-api.com tidak bisa dihubungi, atau kredensial WHMCS salah |
 
@@ -307,7 +309,7 @@ sedang down, container tetap jalan dan mencoba lagi di jadwal berikutnya.
 | `PROMO` | | | Item promo yang tidak dihitung sebagai masalah, misalnya `my.id:register,biz.id:register`. Lihat [Harga promo](#harga-promo) |
 | `GTLD_ENABLED` | | `true` | Cek harga gTLD. Isi `false` untuk hanya mengecek domain .id |
 | `GTLD_ROUND_TO` | | `500` | Harga jual gTLD dibulatkan ke atas ke kelipatan ini (Rupiah) |
-| `USD_RATE_ROUND_TO` | | `100` | Kurs live dibulatkan ke atas ke kelipatan ini sebelum dipakai. Isi `1` untuk mengikuti kurs live hampir persis |
+| `USD_RATE_ROUND_TO` | | `1` | Kurs live dibulatkan ke atas ke kelipatan ini sebelum dipakai. `1` berarti mengikuti kurs live. Isi `100` atau lebih kalau harga seharusnya terlalu sering bergeser |
 | `TZ` | | `Asia/Jakarta` | Zona waktu jam di log, dengan nama IANA seperti `Asia/Makassar` atau `UTC` |
 | `INTERVAL_MINUTES` | | `360` | Jarak antar-pengecekan dalam menit, untuk mode `--loop` dan Docker |
 | `STATE_FILE` | | `/data/state.json` di Docker | Hanya dipakai saat jalan tanpa Docker |
