@@ -58,7 +58,7 @@ class Config:
     promo: Promo = frozenset()
     gtld_enabled: bool = True
     gtld_round_to: int = 500
-    usd_rate_round_to: int = 500
+    usd_rate_round_to: int = 100
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -97,7 +97,7 @@ class Config:
             promo=promo,
             gtld_enabled=os.environ.get("GTLD_ENABLED", "true").strip().lower() not in ("0", "false", "no", "off"),
             gtld_round_to=positive_int("GTLD_ROUND_TO", "500"),
-            usd_rate_round_to=positive_int("USD_RATE_ROUND_TO", "500"),
+            usd_rate_round_to=positive_int("USD_RATE_ROUND_TO", "100"),
         )
 
 

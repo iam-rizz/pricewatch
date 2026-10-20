@@ -17,7 +17,8 @@ SELL_OK = {**ID_SELL, "com": {"register": 248_000, "renew": 248_000}}
 
 @pytest.fixture
 def cfg(tmp_path):
-    return Config(ppn=Decimal("11"), margin=Decimal("3"), state_file=tmp_path / "state.json")
+    # Angka di tes ini ditulis untuk kurs dibulatkan ke kelipatan Rp500 (18.055 → 18.500)
+    return Config(ppn=Decimal("11"), margin=Decimal("3"), state_file=tmp_path / "state.json", usd_rate_round_to=500)
 
 
 def raise_or(value):
@@ -173,3 +174,11 @@ def test_upgrade_dari_state_lama_tanpa_gtld(cfg):
 def test_fetch_gtld_tanpa_fetch_rate_ditolak(cfg):
     with pytest.raises(ValueError, match="fetch_rate"):
         run(cfg, fetch_reseller=lambda: ID_RESELLER, fetch_sell=lambda: SELL_OK, notify=print, fetch_gtld=lambda: GTLD)
+
+
+def test_default_kurs_dibulatkan_ke_100(tmp_path):
+    cfg = Config(ppn=Decimal("11"), margin=Decimal("3"), state_file=tmp_path / "state.json")
+    # 11,75 × 18.100 × 1,14 = 242.452,5 → 242.500
+    sell = {**ID_SELL, "com": {"register": 242_500, "renew": 242_500}}
+    [text] = go(cfg, sell=sell)
+    assert "✅" in text and "Rp18.100" in text and "kelipatan Rp100" in text

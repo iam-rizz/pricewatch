@@ -20,9 +20,16 @@ def env(monkeypatch):
     return monkeypatch
 
 
-def test_gtld_default_aktif_dengan_pembulatan_500(env):
+def test_gtld_default_aktif_harga_bulat_500_kurs_bulat_100(env):
     cfg = Config.from_env()
-    assert (cfg.gtld_enabled, cfg.gtld_round_to, cfg.usd_rate_round_to) == (True, 500, 500)
+    assert (cfg.gtld_enabled, cfg.gtld_round_to, cfg.usd_rate_round_to) == (True, 500, 100)
+
+
+def test_default_dataclass_sama_dengan_default_env():
+    from decimal import Decimal
+    from pathlib import Path
+
+    assert Config(ppn=Decimal("11"), margin=Decimal("3"), state_file=Path("x")).usd_rate_round_to == 100
 
 
 @pytest.mark.parametrize("value", ["false", "0", "off", "NO"])

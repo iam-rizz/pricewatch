@@ -15,7 +15,7 @@ harga jual = ROUNDUP(reseller × (1 + PPN + margin), ke ribuan)
 Rumus ini sama dengan Excel `=ROUNDUP(B7*(1+$C$2+$C$3),-3)`. PPN default 11% dan margin 3%,
 keduanya bisa diubah lewat env. Harga di digitalregistra belum termasuk PPN.
 
-Untuk gTLD, harga USD dikalikan kurs dulu, lalu dibulatkan ke atas ke kelipatan Rp500 (lihat
+Untuk gTLD, harga USD dikalikan kurs dulu, lalu harga jualnya dibulatkan ke atas ke kelipatan Rp500 (lihat
 [Domain gTLD dan kurs](#domain-gtld-dan-kurs)).
 
 Contoh hasil dengan harga Gold Slab per Oktober 2026:
@@ -89,20 +89,21 @@ sebagai 🟡. Aksi lain di TLD yang sama, misalnya renew .my.id, tetap dicek sep
 Harga gTLD di digitalregistra dalam USD. Pricewatch menghitungnya seperti ini:
 
 ```
-kurs efektif = ROUNDUP(kurs live, ke kelipatan Rp500)
+kurs efektif = ROUNDUP(kurs live, ke kelipatan Rp100)
 harga jual   = ROUNDUP(USD × kurs efektif × (1 + PPN + margin), ke kelipatan Rp500)
 modal        = USD × kurs live × (1 + PPN)
 ```
 
 Kurs live diambil dari [open.er-api.com](https://open.er-api.com), yang diperbarui sekali sehari.
 Kurs itu dibulatkan ke atas supaya harga seharusnya tidak berubah setiap hari: harga baru bergeser kalau
-kurs melewati kelipatan Rp500, misalnya dari 18.480 ke 18.520. Pembulatan ini juga memberi bantalan
-margin. Modal tetap dihitung dengan kurs live, supaya status RUGI hanya muncul kalau Anda memang rugi
+kurs melewati kelipatan Rp100, misalnya dari 18.090 ke 18.110. Selisih kurs efektif dengan kurs live
+paling banyak Rp100, sekitar 0,5%. Kelipatannya bisa diubah dengan `USD_RATE_ROUND_TO`; isi `1` untuk
+mengikuti kurs live hampir persis, dengan konsekuensi harga seharusnya bisa bergeser setiap hari. Modal tetap dihitung dengan kurs live, supaya status RUGI hanya muncul kalau Anda memang rugi
 dengan kurs hari itu.
 
 Kurs efektif naik begitu kurs live melewatinya, tapi baru turun kalau kurs live sudah turun satu
-kelipatan penuh ditambah Rp100. Misalnya kurs efektif 19.000 baru turun ke 18.500 setelah kurs live
-mencapai 18.400 atau lebih rendah. Dengan begitu, kurs live yang bergerak di sekitar batas kelipatan
+kelipatan penuh ditambah seperlima kelipatan (Rp120 untuk kelipatan Rp100). Misalnya kurs efektif
+18.200 baru turun ke 18.100 setelah kurs live mencapai 18.080 atau lebih rendah. Dengan begitu, kurs live yang bergerak di sekitar batas kelipatan
 tidak membuat harga seharusnya bolak-balik setiap hari. Kalau kurs efektif berubah, Pricewatch
 mengirim 💱 bersama daftar harga yang perlu disesuaikan.
 
@@ -306,7 +307,7 @@ sedang down, container tetap jalan dan mencoba lagi di jadwal berikutnya.
 | `PROMO` | | | Item promo yang tidak dihitung sebagai masalah, misalnya `my.id:register,biz.id:register`. Lihat [Harga promo](#harga-promo) |
 | `GTLD_ENABLED` | | `true` | Cek harga gTLD. Isi `false` untuk hanya mengecek domain .id |
 | `GTLD_ROUND_TO` | | `500` | Harga jual gTLD dibulatkan ke atas ke kelipatan ini (Rupiah) |
-| `USD_RATE_ROUND_TO` | | `500` | Kurs live dibulatkan ke atas ke kelipatan ini sebelum dipakai |
+| `USD_RATE_ROUND_TO` | | `100` | Kurs live dibulatkan ke atas ke kelipatan ini sebelum dipakai. Isi `1` untuk mengikuti kurs live hampir persis |
 | `TZ` | | `Asia/Jakarta` | Zona waktu jam di log, dengan nama IANA seperti `Asia/Makassar` atau `UTC` |
 | `INTERVAL_MINUTES` | | `360` | Jarak antar-pengecekan dalam menit, untuk mode `--loop` dan Docker |
 | `STATE_FILE` | | `/data/state.json` di Docker | Hanya dipakai saat jalan tanpa Docker |
