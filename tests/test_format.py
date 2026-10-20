@@ -34,3 +34,10 @@ def test_jenis_berbeda_tidak_digabung():
 def test_urutan_aksi_tetap_register_renew_transfer():
     text = format_issues([issue("mismatch", "top", a, 130_500) for a in ("transfer", "register", "renew")])
     assert ".top register, renew, transfer:" in text
+
+
+def test_rugi_dengan_modal_berbeda_tidak_digabung():
+    a = issue("loss", "biz", "register", 380_000, cost=Decimal("384000"))
+    b = issue("loss", "biz", "renew", 380_000, cost=Decimal("390000"))
+    text = format_issues([a, b])
+    assert "modal Rp384.000" in text and "modal Rp390.000" in text

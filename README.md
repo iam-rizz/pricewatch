@@ -100,7 +100,14 @@ kurs melewati kelipatan Rp500, misalnya dari 18.480 ke 18.520. Pembulatan ini ju
 margin. Modal tetap dihitung dengan kurs live, supaya status RUGI hanya muncul kalau Anda memang rugi
 dengan kurs hari itu.
 
-Kalau kurs efektif berubah, Pricewatch mengirim 💱 bersama daftar harga yang perlu disesuaikan.
+Kurs efektif naik begitu kurs live melewatinya, tapi baru turun kalau kurs live sudah turun satu
+kelipatan penuh ditambah Rp100. Misalnya kurs efektif 19.000 baru turun ke 18.500 setelah kurs live
+mencapai 18.400 atau lebih rendah. Dengan begitu, kurs live yang bergerak di sekitar batas kelipatan
+tidak membuat harga seharusnya bolak-balik setiap hari. Kalau kurs efektif berubah, Pricewatch
+mengirim 💱 bersama daftar harga yang perlu disesuaikan.
+
+Kalau halaman gTLD atau layanan kurs gagal diakses, domain .id tetap dicek seperti biasa dan Pricewatch
+mengirim 🚨 khusus gTLD sekali.
 
 Register gTLD yang sedang promo di digitalregistra (harga normal dicoret, diikuti harga promo) dihitung
 dari harga promonya. Saat promo reseller mulai atau selesai, harga USD-nya berubah dan Pricewatch
@@ -323,7 +330,7 @@ Opsi CLI:
 | 🚨 `WhmcsError: HTTP 404 ... (bukan JSON WHMCS)` | `WHMCS_API_URL` salah. Alamatnya harus diakhiri `/includes/api.php` |
 | 🚨 `WhmcsError: HTTP 403 ... (bukan JSON WHMCS)` | Request diblokir sebelum sampai ke WHMCS, biasanya oleh firewall atau WAF |
 | 🚨 `ScrapeError: ...` | Struktur halaman digitalregistra berubah. Parser di `pricewatch/registra.py` (domain .id) atau `pricewatch/gtld.py` (gTLD) perlu disesuaikan |
-| 🚨 `KursError: ...` atau error koneksi ke open.er-api.com | Layanan kurs sedang bermasalah. Pricewatch mencoba lagi di jadwal berikutnya. Kalau berlangsung lama, matikan sementara dengan `GTLD_ENABLED=false` |
+| 🚨 *Pengecekan harga gTLD gagal* dengan `KursError` atau error koneksi ke open.er-api.com | Layanan kurs sedang bermasalah. Domain .id tetap dicek seperti biasa, dan gTLD dicoba lagi di jadwal berikutnya. Kalau berlangsung lama, matikan sementara dengan `GTLD_ENABLED=false` |
 | `--test-telegram` error `chat not found` | `TELEGRAM_CHAT_ID` salah, bot belum pernah di-chat, atau bot belum masuk grup |
 | `401 Unauthorized` dari Telegram | `TELEGRAM_BOT_TOKEN` salah |
 | `TelegramError: ... message thread not found` | `TELEGRAM_THREAD_ID` salah. Bisa jadi yang tersalin ID pesan, bukan ID topik |
