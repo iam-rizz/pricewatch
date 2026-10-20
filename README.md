@@ -28,6 +28,15 @@ Contoh hasil dengan harga Gold Slab per Oktober 2026:
 | .web.id / .or.id / .ac.id / .sch.id / .ponpes.id | 45.000 | 52.000 |
 | .my.id | 22.000 | 26.000 |
 
+Contoh gTLD dengan kurs 18.056 per USD (20 Oktober 2026):
+
+| TLD | Aksi | Reseller | Harga jual |
+|---|---|---|---|
+| .com | register, renew, transfer | $11,75 | 242.000 |
+| .net | register, renew, transfer | $11,93 | 246.000 |
+| .xyz | register (promo reseller) | $1,91 | 39.500 |
+| .xyz | renew, transfer | $14,90 | 307.000 |
+
 ## Daftar isi
 
 - [Cara kerja](#cara-kerja)
@@ -116,6 +125,11 @@ Register gTLD yang sedang promo di digitalregistra (harga normal dicoret, diikut
 dari harga promonya. Saat promo reseller mulai atau selesai, harga USD-nya berubah dan Pricewatch
 mengirim 📢. Kalau Anda sengaja menjual di bawah rumus, daftarkan di `PROMO` seperti domain .id.
 
+Harga di tabel gTLD tidak selalu sama dengan halaman promo bulanan digitalregistra. Pada Oktober 2026,
+207 dari 211 harga promo sama, tapi register .asia tercatat $1,88 di tabel dan $1,32 di halaman promo.
+Pricewatch memakai tabel gTLD. Menurut digitalregistra, harga paling akurat ada di panel reseller
+(*Configuration → Products*), jadi cek di sana kalau ada harga yang meragukan.
+
 Pengecekan gTLD bisa dimatikan dengan `GTLD_ENABLED=false`.
 
 ## Notifikasi
@@ -132,15 +146,25 @@ Pengecekan gTLD bisa dimatikan dengan `GTLD_ENABLED=false`.
 | ✅ | Semua harga sesuai. Dikirim saat run pertama dan saat masalah sebelumnya sudah beres |
 | 🚨 | Pengambilan data gagal, misalnya struktur tabel digitalregistra berubah, open.er-api.com tidak bisa dihubungi, atau kredensial WHMCS salah |
 
+Register, renew, dan transfer dengan status dan harga yang sama ditulis dalam satu baris. Pesan yang
+lebih dari 4.096 karakter (batas Telegram) dipecah menjadi beberapa pesan per baris.
+
 Contoh pesan:
 
 ```
 📢 Harga reseller digitalregistra (Gold Slab) berubah
 🔺 .web.id register: Rp45.000 → Rp47.000
 
-⚠️ Harga jual WHMCS perlu dicek (2)
+📢 Harga reseller gTLD digitalregistra berubah
+🔺 .com register: $11.75 → $12.10
+
+⚠️ Harga jual WHMCS perlu dicek (4)
+🔴 RUGI .com register: jual Rp240.500 < modal Rp242.498 → seharusnya Rp249.500
 🔴 RUGI .my.id register: jual Rp24.000 < modal Rp24.420 → seharusnya Rp26.000
-🟡 .web.id register: jual Rp52.000, seharusnya Rp54.000
+🔴 RUGI .web.id register: jual Rp52.000 < modal Rp52.170 → seharusnya Rp54.000
+🟡 .com renew, transfer: jual Rp240.500, seharusnya Rp242.000
+
+💱 Kurs gTLD Rp18.056 per USD (kurs live dibulatkan ke atas ke rupiah)
 ```
 
 ## Panduan deploy
@@ -245,7 +269,8 @@ docker compose run --rm pricewatch --dry-run
 
 Kalau output dry-run berisi 🚨, kredensial atau whitelist IP WHMCS belum benar; lihat
 [Troubleshooting](#troubleshooting). Kalau semua TLD bertanda ⚪, TLD-nya belum dibuat di WHMCS atau
-mata uangnya bukan IDR (atur `WHMCS_CURRENCY_ID`).
+mata uangnya bukan IDR (atur `WHMCS_CURRENCY_ID`). gTLD yang Anda jual muncul di output yang sama,
+diikuti baris 💱 berisi kurs yang dipakai.
 
 Dry-run juga menyimpan state. Kalau state itu dibiarkan, ringkasan pertama tidak akan dikirim ke
 Telegram, jadi hapus dulu sebelum menjalankan Pricewatch untuk pertama kali:
@@ -285,13 +310,14 @@ Ringkasan pertama (✅ atau ⚠️) masuk ke Telegram beberapa detik setelah con
 Setiap pengecekan menulis satu baris ringkasan, dan mode loop mencatat jam pengecekan berikutnya:
 
 ```
-2026-10-20 02:04:59 WIB INFO Cek selesai: 9 TLD, 2 masalah, 2 promo, notifikasi dikirim
+2026-10-20 02:04:59 WIB INFO Cek selesai: 26 TLD, 2 masalah, 2 promo, notifikasi dikirim
 2026-10-20 02:04:59 WIB INFO Cek berikutnya sekitar 02:14:59 WIB
 ```
 
-Kalau baris `Cek selesai` tidak muncul lagi setelah jam yang tertulis di `Cek berikutnya`, berarti
-loop-nya macet. Log dibatasi tiga file masing-masing 5 MB. Kalau satu pengecekan gagal, misalnya karena Telegram
-sedang down, container tetap jalan dan mencoba lagi di jadwal berikutnya.
+Jumlah TLD adalah domain .id ditambah gTLD yang Anda jual. Kalau baris `Cek selesai` tidak muncul lagi
+setelah jam yang tertulis di `Cek berikutnya`, berarti loop-nya macet. Log dibatasi tiga file masing-masing
+5 MB. Kalau satu pengecekan gagal, misalnya karena Telegram sedang down, container tetap jalan dan mencoba
+lagi di jadwal berikutnya.
 
 ## Konfigurasi
 
@@ -340,6 +366,8 @@ Opsi CLI:
 | `TelegramError: ... not enough rights` | Topik dikunci, jadikan bot admin grup |
 | Semua TLD ⚪ | TLD belum ada di WHMCS, atau mata uang salah (`WHMCS_CURRENCY_ID`) |
 | Tidak ada notif sama sekali | Wajar kalau tidak ada perubahan. Cek `docker compose logs` untuk memastikan |
+| Harga gTLD di pesan berbeda dengan halaman promo digitalregistra | Pricewatch memakai tabel harga gTLD, yang kadang berbeda dengan halaman promo. Cek harga di panel reseller. Lihat [Domain gTLD dan kurs](#domain-gtld-dan-kurs) |
+| Hampir semua gTLD 🟡 dengan selisih kecil | Harga WHMCS dihitung dengan kurs lama. Sesuaikan harga di WHMCS, atau bulatkan kurs dengan `USD_RATE_ROUND_TO` |
 | `docker compose pull` ditolak (denied) | Package GHCR masih private. Ubah jadi public di GitHub, atau build sendiri dengan `--build` |
 
 ## Tanpa Docker
@@ -351,6 +379,8 @@ cp .env.example .env && chmod 600 .env   # isi, dan aktifkan STATE_FILE=state.js
 ./run.sh --test-telegram
 ./run.sh --dry-run
 ```
+
+Tanpa Docker, zona waktu log tetap dibaca dari `TZ` (default `Asia/Jakarta`).
 
 Cron (tiap 6 jam):
 
@@ -379,6 +409,8 @@ pricewatch/
 ├── telegram.py   # kirim pesan
 └── main.py       # state, format pesan, CLI, loop
 ```
+
+Riwayat perubahan ada di [CHANGELOG.md](CHANGELOG.md).
 
 GitHub Actions menjalankan tes di setiap push dan pull request. Push ke `main` yang lolos tes
 mem-publish image `ghcr.io/iam-rizz/pricewatch:latest`, dan tag `v*` mem-publish image dengan tag versi.
