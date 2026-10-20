@@ -58,7 +58,7 @@ class Config:
     promo: Promo = frozenset()
     gtld_enabled: bool = True
     gtld_round_to: int = 500
-    usd_rate_round_to: int = 500
+    usd_rate_round_to: int = 1
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -97,7 +97,7 @@ class Config:
             promo=promo,
             gtld_enabled=os.environ.get("GTLD_ENABLED", "true").strip().lower() not in ("0", "false", "no", "off"),
             gtld_round_to=positive_int("GTLD_ROUND_TO", "500"),
-            usd_rate_round_to=positive_int("USD_RATE_ROUND_TO", "500"),
+            usd_rate_round_to=positive_int("USD_RATE_ROUND_TO", "1"),
         )
 
 
@@ -206,6 +206,16 @@ def format_promo(issues: list[Issue]) -> str:
     return "\n".join(lines)
 
 
+def format_rate(rate: int, live: Decimal, previous: int | None, cfg: Config) -> str:
+    if cfg.usd_rate_round_to == 1:
+        how = "kurs live dibulatkan ke atas ke rupiah"
+    else:
+        how = f"kurs live {rp(live)}, dibulatkan ke atas ke kelipatan {rp(cfg.usd_rate_round_to)}"
+    if previous is not None:
+        return f"💱 Kurs gTLD berubah: {rp(previous)} → {rp(rate)} per USD ({how})"
+    return f"💱 Kurs gTLD {rp(rate)} per USD ({how})"
+
+
 def run(
     cfg: Config,
     fetch_reseller: Callable[[], Prices],
@@ -287,11 +297,9 @@ def run(
         parts.append(format_changes(changes))
     if gtld_changes:
         parts.append(format_changes(gtld_changes, title="Harga reseller gTLD digitalregistra berubah", money=usd))
-    if rate_changed:
-        parts.append(
-            f"💱 Kurs efektif berubah: {rp(state['kurs'])} → {rp(rate)} per USD (kurs live {rp(live_rate)})"
-        )
-    if first_run or changes or gtld_changes or rate_changed or keys_changed:
+    # Perubahan kurs saja tidak memicu notifikasi: kurs live bergerak setiap hari. Notifikasi dikirim
+    # kalau status harga ikut berubah, misalnya harga yang tadinya sesuai jadi tidak sesuai rumus
+    if first_run or changes or gtld_changes or keys_changed:
         if rate is not None:
             scope = f"{len(reseller)} TLD .id, {gtld_sold} gTLD"
         elif gtld_error is not None:
@@ -307,11 +315,8 @@ def run(
         promo_text = format_promo(issues)
         if promo_text:
             parts.append(promo_text)
-        if rate is not None and not rate_changed:
-            parts.append(
-                f"💱 Kurs gTLD {rp(rate)} per USD (kurs live {rp(live_rate)},"
-                f" dibulatkan ke atas ke kelipatan {rp(cfg.usd_rate_round_to)})"
-            )
+        if rate is not None:
+            parts.append(format_rate(rate, live_rate, state.get("kurs") if rate_changed else None, cfg))
     if recovered and not parts:
         parts.append("✅ Pengecekan harga domain kembali normal. Tidak ada perubahan harga.")
 
