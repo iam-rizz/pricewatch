@@ -2,10 +2,11 @@
 
 [![CI](https://github.com/iam-rizz/pricewatch/actions/workflows/ci.yml/badge.svg)](https://github.com/iam-rizz/pricewatch/actions/workflows/ci.yml)
 
-Pricewatch mengambil harga reseller domain Indonesia dari kolom Gold Slab di
-[digitalregistra](https://www.digitalregistra.co.id/harga-domain-indonesia/), lalu mencocokkannya
-dengan harga jual di WHMCS Anda. Kalau harga reseller berubah atau harga jual tidak sesuai rumus,
-Pricewatch mengirim pesan ke Telegram.
+Pricewatch mengambil harga reseller dari digitalregistra, lalu mencocokkannya dengan harga jual di
+WHMCS Anda. Ada dua sumber harga: kolom Gold Slab di
+[harga domain Indonesia](https://www.digitalregistra.co.id/harga-domain-indonesia/) dalam Rupiah, dan
+[harga gTLD](https://www.digitalregistra.co.id/harga-gtld/) dalam USD. Kalau harga reseller berubah atau
+harga jual tidak sesuai rumus, Pricewatch mengirim pesan ke Telegram.
 
 ```
 harga jual = ROUNDUP(reseller × (1 + PPN + margin), ke ribuan)
@@ -13,6 +14,9 @@ harga jual = ROUNDUP(reseller × (1 + PPN + margin), ke ribuan)
 
 Rumus ini sama dengan Excel `=ROUNDUP(B7*(1+$C$2+$C$3),-3)`. PPN default 11% dan margin 3%,
 keduanya bisa diubah lewat env. Harga di digitalregistra belum termasuk PPN.
+
+Untuk gTLD, harga USD dikalikan kurs dulu, lalu dibulatkan ke atas ke kelipatan Rp500 (lihat
+[Domain gTLD dan kurs](#domain-gtld-dan-kurs)).
 
 Contoh hasil dengan harga Gold Slab per Oktober 2026:
 
@@ -27,6 +31,8 @@ Contoh hasil dengan harga Gold Slab per Oktober 2026:
 ## Daftar isi
 
 - [Cara kerja](#cara-kerja)
+  - [Harga promo](#harga-promo)
+  - [Domain gTLD dan kurs](#domain-gtld-dan-kurs)
 - [Notifikasi](#notifikasi)
 - [Panduan deploy](#panduan-deploy)
   - [1. Siapkan API WHMCS](#1-siapkan-api-whmcs)
@@ -46,15 +52,17 @@ Contoh hasil dengan harga Gold Slab per Oktober 2026:
 ```
 tiap INTERVAL_MINUTES (default 6 jam)
   │
-  ├─ 1. Scrape tabel harga digitalregistra → kolom Gold Slab (register / renew / transfer)
-  ├─ 2. Ambil harga jual 1 tahun dari WHMCS API (GetTLDPricing)
-  ├─ 3. Hitung harga jual seharusnya per TLD per aksi
-  ├─ 4. Bandingkan dengan state run sebelumnya (volume /data/state.json)
-  └─ 5. Kirim Telegram hanya kalau ada yang berubah
+  ├─ 1. Scrape tabel harga digitalregistra: domain .id (Gold Slab, Rupiah) dan gTLD (USD)
+  ├─ 2. Ambil kurs USD ke IDR dari open.er-api.com
+  ├─ 3. Ambil harga jual 1 tahun dari WHMCS API (GetTLDPricing)
+  ├─ 4. Hitung harga jual seharusnya per TLD per aksi (register / renew / transfer)
+  ├─ 5. Bandingkan dengan state run sebelumnya (volume /data/state.json)
+  └─ 6. Kirim Telegram hanya kalau ada yang berubah
 ```
 
-Pricewatch hanya mengecek TLD yang ada di tabel digitalregistra. TLD lain di WHMCS, misalnya .com
-atau .ai.id, dilewati.
+Domain .id yang dicek adalah semua TLD di tabel Gold Slab. Dari 400 gTLD di tabel digitalregistra,
+yang dicek hanya yang Anda jual di WHMCS. TLD WHMCS yang tidak ada di kedua tabel, misalnya .ai.id,
+dilewati.
 
 Hitungannya memakai `Decimal` supaya pembulatan ke atas sama persis dengan Excel. Dengan float,
 `1 + 0.11 + 0.03` bernilai `1.1400000000000001`, sehingga reseller 200.000 dihitung `228000.00000000003`
@@ -76,6 +84,37 @@ promonya tidak memicu notifikasi. Begitu harganya kembali sesuai rumus, Pricewat
 sekali untuk menghapusnya dari `PROMO`. Kalau harganya malah di atas rumus, item itu tetap dilaporkan
 sebagai 🟡. Aksi lain di TLD yang sama, misalnya renew .my.id, tetap dicek seperti biasa.
 
+### Domain gTLD dan kurs
+
+Harga gTLD di digitalregistra dalam USD. Pricewatch menghitungnya seperti ini:
+
+```
+kurs efektif = ROUNDUP(kurs live, ke kelipatan Rp500)
+harga jual   = ROUNDUP(USD × kurs efektif × (1 + PPN + margin), ke kelipatan Rp500)
+modal        = USD × kurs live × (1 + PPN)
+```
+
+Kurs live diambil dari [open.er-api.com](https://open.er-api.com), yang diperbarui sekali sehari.
+Kurs itu dibulatkan ke atas supaya harga seharusnya tidak berubah setiap hari: harga baru bergeser kalau
+kurs melewati kelipatan Rp500, misalnya dari 18.480 ke 18.520. Pembulatan ini juga memberi bantalan
+margin. Modal tetap dihitung dengan kurs live, supaya status RUGI hanya muncul kalau Anda memang rugi
+dengan kurs hari itu.
+
+Kurs efektif naik begitu kurs live melewatinya, tapi baru turun kalau kurs live sudah turun satu
+kelipatan penuh ditambah Rp100. Misalnya kurs efektif 19.000 baru turun ke 18.500 setelah kurs live
+mencapai 18.400 atau lebih rendah. Dengan begitu, kurs live yang bergerak di sekitar batas kelipatan
+tidak membuat harga seharusnya bolak-balik setiap hari. Kalau kurs efektif berubah, Pricewatch
+mengirim 💱 bersama daftar harga yang perlu disesuaikan.
+
+Kalau halaman gTLD atau layanan kurs gagal diakses, domain .id tetap dicek seperti biasa dan Pricewatch
+mengirim 🚨 khusus gTLD sekali.
+
+Register gTLD yang sedang promo di digitalregistra (harga normal dicoret, diikuti harga promo) dihitung
+dari harga promonya. Saat promo reseller mulai atau selesai, harga USD-nya berubah dan Pricewatch
+mengirim 📢. Kalau Anda sengaja menjual di bawah rumus, daftarkan di `PROMO` seperti domain .id.
+
+Pengecekan gTLD bisa dimatikan dengan `GTLD_ENABLED=false`.
+
 ## Notifikasi
 
 | Ikon | Kejadian |
@@ -86,8 +125,9 @@ sebagai 🟡. Aksi lain di TLD yang sama, misalnya renew .my.id, tetap dicek sep
 | ⚪ | TLD atau aksi (register, renew, transfer) tidak dijual di WHMCS |
 | 🏷️ | Item di `PROMO` yang dijual di bawah harga rumus. Hanya ditampilkan, tidak memicu notifikasi sendiri |
 | ℹ️ | Item di `PROMO` yang harganya sudah kembali sesuai rumus. Dikirim sekali sebagai pengingat untuk menghapusnya dari `PROMO` |
+| 💱 | Kurs efektif USD ke IDR berubah, disertai daftar harga gTLD yang perlu disesuaikan |
 | ✅ | Semua harga sesuai. Dikirim saat run pertama dan saat masalah sebelumnya sudah beres |
-| 🚨 | Pengambilan data gagal, misalnya struktur tabel digitalregistra berubah atau kredensial WHMCS salah |
+| 🚨 | Pengambilan data gagal, misalnya struktur tabel digitalregistra berubah, open.er-api.com tidak bisa dihubungi, atau kredensial WHMCS salah |
 
 Contoh pesan:
 
@@ -264,6 +304,9 @@ sedang down, container tetap jalan dan mencoba lagi di jadwal berikutnya.
 | `PPN_PERCENT` | | `11` | PPN dalam persen |
 | `MARGIN_PERCENT` | | `3` | Margin dalam persen |
 | `PROMO` | | | Item promo yang tidak dihitung sebagai masalah, misalnya `my.id:register,biz.id:register`. Lihat [Harga promo](#harga-promo) |
+| `GTLD_ENABLED` | | `true` | Cek harga gTLD. Isi `false` untuk hanya mengecek domain .id |
+| `GTLD_ROUND_TO` | | `500` | Harga jual gTLD dibulatkan ke atas ke kelipatan ini (Rupiah) |
+| `USD_RATE_ROUND_TO` | | `500` | Kurs live dibulatkan ke atas ke kelipatan ini sebelum dipakai |
 | `TZ` | | `Asia/Jakarta` | Zona waktu jam di log, dengan nama IANA seperti `Asia/Makassar` atau `UTC` |
 | `INTERVAL_MINUTES` | | `360` | Jarak antar-pengecekan dalam menit, untuk mode `--loop` dan Docker |
 | `STATE_FILE` | | `/data/state.json` di Docker | Hanya dipakai saat jalan tanpa Docker |
@@ -286,7 +329,8 @@ Opsi CLI:
 | 🚨 `WhmcsError: ... permission` | Role API belum mencentang `GetTLDPricing` |
 | 🚨 `WhmcsError: HTTP 404 ... (bukan JSON WHMCS)` | `WHMCS_API_URL` salah. Alamatnya harus diakhiri `/includes/api.php` |
 | 🚨 `WhmcsError: HTTP 403 ... (bukan JSON WHMCS)` | Request diblokir sebelum sampai ke WHMCS, biasanya oleh firewall atau WAF |
-| 🚨 `ScrapeError: ...` | Struktur halaman digitalregistra berubah. Parser di `pricewatch/registra.py` perlu disesuaikan |
+| 🚨 `ScrapeError: ...` | Struktur halaman digitalregistra berubah. Parser di `pricewatch/registra.py` (domain .id) atau `pricewatch/gtld.py` (gTLD) perlu disesuaikan |
+| 🚨 *Pengecekan harga gTLD gagal* dengan `KursError` atau error koneksi ke open.er-api.com | Layanan kurs sedang bermasalah. Domain .id tetap dicek seperti biasa, dan gTLD dicoba lagi di jadwal berikutnya. Kalau berlangsung lama, matikan sementara dengan `GTLD_ENABLED=false` |
 | `--test-telegram` error `chat not found` | `TELEGRAM_CHAT_ID` salah, bot belum pernah di-chat, atau bot belum masuk grup |
 | `401 Unauthorized` dari Telegram | `TELEGRAM_BOT_TOKEN` salah |
 | `TelegramError: ... message thread not found` | `TELEGRAM_THREAD_ID` salah. Bisa jadi yang tersalin ID pesan, bukan ID topik |
@@ -324,7 +368,9 @@ Isi folder `pricewatch/`:
 ```
 pricewatch/
 ├── pricing.py    # rumus harga jual & modal
-├── registra.py   # scraper tabel digitalregistra (Gold Slab)
+├── registra.py   # scraper tabel domain .id digitalregistra (Gold Slab)
+├── gtld.py       # scraper tabel gTLD digitalregistra (USD)
+├── kurs.py       # kurs USD ke IDR dari open.er-api.com
 ├── whmcs.py      # client WHMCS GetTLDPricing
 ├── check.py      # deteksi rugi / mismatch / missing / perubahan harga
 ├── telegram.py   # kirim pesan

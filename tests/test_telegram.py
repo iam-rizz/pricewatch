@@ -45,3 +45,17 @@ def test_error_telegram_tampilkan_deskripsi(posted):
     posted.response = FakeResponse(400, {"ok": False, "description": "Bad Request: message thread not found"})
     with pytest.raises(TelegramError, match="message thread not found"):
         telegram.send_message("tok", "-1003658699335", "halo", thread_id="1")
+
+
+def test_pesan_panjang_dipecah_per_baris(posted):
+    lines = [f"🟡 .tld{n} register, renew, transfer: jual Rp245.000, seharusnya Rp252.000" for n in range(120)]
+    telegram.send_message("tok", "-100", "\n".join(lines), thread_id="7")
+    assert len(posted) > 1
+    assert all(len(p["text"]) <= telegram.MAX_LEN for p in posted)
+    assert "\n".join(p["text"] for p in posted) == "\n".join(lines)  # tidak ada baris yang terpotong
+    assert all(p["message_thread_id"] == 7 for p in posted)
+
+
+def test_pesan_pendek_tetap_satu(posted):
+    telegram.send_message("tok", "-100", "halo\ndunia")
+    assert [p["text"] for p in posted] == ["halo\ndunia"]

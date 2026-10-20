@@ -12,9 +12,8 @@ from pathlib import Path
 from typing import Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pricewatch import registra, telegram, whmcs
+from pricewatch import gtld, kurs, registra, telegram, whmcs
 from pricewatch.check import Issue, Prices, Promo, find_issues, reseller_changes
-from pricewatch.pricing import modal
 
 log = logging.getLogger("pricewatch")
 
@@ -41,6 +40,7 @@ class LocalFormatter(logging.Formatter):
         return datetime.fromtimestamp(record.created, self.tz).strftime(datefmt or "%Y-%m-%d %H:%M:%S %Z")
 
 KIND_ORDER = {"loss": 0, "mismatch": 1, "missing": 2}
+ACTION_ORDER = {action: n for n, action in enumerate(whmcs.ACTIONS)}
 
 
 @dataclass
@@ -56,6 +56,9 @@ class Config:
     telegram_chat_id: str | None = None
     telegram_thread_id: str | None = None
     promo: Promo = frozenset()
+    gtld_enabled: bool = True
+    gtld_round_to: int = 500
+    usd_rate_round_to: int = 500
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -63,6 +66,16 @@ class Config:
             value = os.environ.get(name)
             if not value:
                 sys.exit(f"Variabel {name} belum diisi. Lihat contohnya di .env.example")
+            return value
+
+        def positive_int(name: str, default: str) -> int:
+            raw = os.environ.get(name) or default
+            try:
+                value = int(raw)
+            except ValueError:
+                value = 0
+            if value <= 0:
+                sys.exit(f"{name} harus bilangan bulat positif, misalnya 500 (sekarang: {raw})")
             return value
 
         try:
@@ -82,6 +95,9 @@ class Config:
             telegram_chat_id=need("TELEGRAM_CHAT_ID"),
             telegram_thread_id=os.environ.get("TELEGRAM_THREAD_ID") or None,
             promo=promo,
+            gtld_enabled=os.environ.get("GTLD_ENABLED", "true").strip().lower() not in ("0", "false", "no", "off"),
+            gtld_round_to=positive_int("GTLD_ROUND_TO", "500"),
+            usd_rate_round_to=positive_int("USD_RATE_ROUND_TO", "500"),
         )
 
 
@@ -108,6 +124,20 @@ def rp(value: int | Decimal) -> str:
     return "Rp" + f"{int(value):,}".replace(",", ".")
 
 
+def usd(value: Decimal) -> str:
+    return f"${value:.2f}"
+
+
+def gtld_to_json(prices: Prices) -> dict:
+    return {tld: {action: str(v) for action, v in per.items()} for tld, per in prices.items()}
+
+
+def gtld_from_json(data: dict | None) -> Prices | None:
+    if data is None:
+        return None
+    return {tld: {action: Decimal(v) for action, v in per.items()} for tld, per in data.items()}
+
+
 def load_state(path: Path) -> dict:
     if not path.exists():
         return {"reseller": None, "issue_keys": [], "error": None}
@@ -120,26 +150,37 @@ def save_state(path: Path, state: dict) -> None:
     tmp.replace(path)
 
 
-def format_changes(changes: list[tuple[str, str, int | None, int | None]]) -> str:
-    lines = ["📢 <b>Harga reseller digitalregistra (Gold Slab) berubah</b>"]
+def format_changes(
+    changes: list[tuple[str, str, int | None, int | None]],
+    title: str = "Harga reseller digitalregistra (Gold Slab) berubah",
+    money: Callable[[int | Decimal], str] = rp,
+) -> str:
+    lines = [f"📢 <b>{title}</b>"]
     for tld, action, before, after in changes:
         if before is None:
-            lines.append(f"🆕 .{escape(tld)} {action}: {rp(after)}")
+            lines.append(f"🆕 .{escape(tld)} {action}: {money(after)}")
         elif after is None:
-            lines.append(f"❌ .{escape(tld)} {action}: hilang dari tabel (sebelumnya {rp(before)})")
+            lines.append(f"❌ .{escape(tld)} {action}: hilang dari tabel (sebelumnya {money(before)})")
         else:
             arrow = "🔺" if after > before else "🔻"
-            lines.append(f"{arrow} .{escape(tld)} {action}: {rp(before)} → {rp(after)}")
+            lines.append(f"{arrow} .{escape(tld)} {action}: {money(before)} → {money(after)}")
     return "\n".join(lines)
 
 
-def format_issues(issues: list[Issue], ppn: Decimal) -> str:
-    lines = [f"⚠️ <b>Harga jual WHMCS perlu dicek ({len(issues)})</b>"]
-    for i in sorted(issues, key=lambda i: (KIND_ORDER[i.kind], i.tld, i.action or "")):
-        name = f".{escape(i.tld)} {i.action}"
+def format_issues(issues: list[Issue]) -> str:
+    # Register, renew, dan transfer dengan status dan harga yang sama cukup satu baris,
+    # supaya pesan untuk puluhan gTLD tidak melewati batas 4.096 karakter Telegram
+    groups: dict[tuple, list[Issue]] = {}
+    for i in issues:
+        groups.setdefault((KIND_ORDER[i.kind], i.tld, i.actual, i.expected, i.cost), []).append(i)
+    lines = [f"⚠️ <b>Harga jual WHMCS perlu dicek ({len(groups)})</b>"]
+    for key in sorted(groups, key=lambda k: (k[0], k[1], min(ACTION_ORDER[i.action] for i in groups[k]))):
+        group = sorted(groups[key], key=lambda i: ACTION_ORDER[i.action])
+        i = group[0]
+        name = f".{escape(i.tld)} {', '.join(g.action for g in group)}"
         if i.kind == "loss":
             lines.append(
-                f"🔴 <b>RUGI</b> {name}: jual {rp(i.actual)} &lt; modal {rp(modal(i.reseller, ppn))}"
+                f"🔴 <b>RUGI</b> {name}: jual {rp(i.actual)} &lt; modal {rp(i.cost)}"
                 f" → seharusnya {rp(i.expected)}"
             )
         elif i.kind == "mismatch":
@@ -170,7 +211,11 @@ def run(
     fetch_reseller: Callable[[], Prices],
     fetch_sell: Callable[[], Prices],
     notify: Callable[[str], None],
+    fetch_gtld: Callable[[], Prices] | None = None,
+    fetch_rate: Callable[[], Decimal] | None = None,
 ) -> None:
+    if fetch_gtld is not None and fetch_rate is None:
+        raise ValueError("fetch_gtld butuh fetch_rate untuk mengubah harga USD ke Rupiah")
     state = load_state(cfg.state_file)
     try:
         reseller = fetch_reseller()
@@ -185,29 +230,88 @@ def run(
             save_state(cfg.state_file, state)
         return
 
-    recovered = state.get("error") is not None
+    # gTLD diambil terpisah: kalau halaman gTLD atau layanan kurs gagal, domain .id tetap dicek
+    gtld_prices = live_rate = gtld_error = None
+    if fetch_gtld is not None:
+        try:
+            gtld_prices = fetch_gtld()
+            live_rate = fetch_rate()
+        except Exception as e:
+            log.exception("Gagal mengambil data gTLD atau kurs")
+            gtld_prices = live_rate = None
+            gtld_error = f"{type(e).__name__}: {e}"
+
+    recovered = state.get("error") is not None or (live_rate is not None and state.get("gtld_error") is not None)
     first_run = state.get("reseller") is None
     changes = reseller_changes(state.get("reseller"), reseller)
     issues = find_issues(reseller, sell, cfg.ppn, cfg.margin, promo=cfg.promo)
-    issue_keys = sorted(i.key for i in issues)
+    id_keys = sorted(i.key for i in issues)
+    # Selama gTLD gagal diambil, masalah gTLD lama dianggap tetap ada supaya tidak dikirim ulang saat pulih
+    gtld_keys = state.get("gtld_issue_keys", [])
+
+    gtld_changes: list = []
+    gtld_sold = 0
+    rate = rate_changed = None
+    if live_rate is not None:
+        old_rate = state.get("kurs")
+        rate = kurs.effective_rate(live_rate, cfg.usd_rate_round_to, previous=old_rate)
+        rate_changed = old_rate is not None and old_rate != rate
+        # Perubahan harga gTLD yang tidak Anda jual tidak perlu dikabarkan
+        gtld_changes = [c for c in reseller_changes(gtld_from_json(state.get("gtld")), gtld_prices) if c[0] in sell]
+        gtld_sold = sum(tld in sell for tld in gtld_prices)
+        issues += find_issues(
+            gtld_prices,
+            sell,
+            cfg.ppn,
+            cfg.margin,
+            promo=cfg.promo,
+            to_idr=lambda price: price * rate,
+            cost_to_idr=lambda price: price * live_rate,
+            round_to=cfg.gtld_round_to,
+            only_sold=True,
+        )
+        gtld_keys = sorted(set(i.key for i in issues) - set(id_keys))
+
+    keys_changed = id_keys != state.get("issue_keys") or gtld_keys != state.get("gtld_issue_keys", [])
     alerts = [i for i in issues if i.is_alert]
     for tld, action in sorted(cfg.promo):
-        if action not in reseller.get(tld, {}):
+        if action not in reseller.get(tld, {}) and action not in (gtld_prices or {}).get(tld, {}):
             log.warning("PROMO %s:%s tidak ada di tabel digitalregistra, diabaikan", tld, action)
 
     parts = []
+    if gtld_error is not None and gtld_error != state.get("gtld_error"):
+        parts.append(
+            f"🚨 <b>Pengecekan harga gTLD gagal</b>, domain .id tetap dicek\n<code>{escape(gtld_error)}</code>"
+        )
     if changes:
         parts.append(format_changes(changes))
-    if first_run or changes or issue_keys != state.get("issue_keys"):
-        if alerts:
-            parts.append(format_issues(alerts, cfg.ppn))
-        elif any(i.kind == "promo" for i in issues):
-            parts.append("✅ Semua harga jual domain Indonesia sudah sesuai rumus, kecuali promo di bawah.")
+    if gtld_changes:
+        parts.append(format_changes(gtld_changes, title="Harga reseller gTLD digitalregistra berubah", money=usd))
+    if rate_changed:
+        parts.append(
+            f"💱 Kurs efektif berubah: {rp(state['kurs'])} → {rp(rate)} per USD (kurs live {rp(live_rate)})"
+        )
+    if first_run or changes or gtld_changes or rate_changed or keys_changed:
+        if rate is not None:
+            scope = f"{len(reseller)} TLD .id, {gtld_sold} gTLD"
+        elif gtld_error is not None:
+            scope = f"{len(reseller)} TLD .id; gTLD tidak dicek"
         else:
-            parts.append(f"✅ Semua harga jual domain Indonesia ({len(reseller)} TLD) sudah sesuai rumus.")
+            scope = f"{len(reseller)} TLD"
+        if alerts:
+            parts.append(format_issues(alerts))
+        elif any(i.kind == "promo" for i in issues):
+            parts.append(f"✅ Semua harga jual ({scope}) sudah sesuai rumus, kecuali promo di bawah.")
+        else:
+            parts.append(f"✅ Semua harga jual ({scope}) sudah sesuai rumus.")
         promo_text = format_promo(issues)
         if promo_text:
             parts.append(promo_text)
+        if rate is not None and not rate_changed:
+            parts.append(
+                f"💱 Kurs gTLD {rp(rate)} per USD (kurs live {rp(live_rate)},"
+                f" dibulatkan ke atas ke kelipatan {rp(cfg.usd_rate_round_to)})"
+            )
     if recovered and not parts:
         parts.append("✅ Pengecekan harga domain kembali normal. Tidak ada perubahan harga.")
 
@@ -215,12 +319,20 @@ def run(
         notify("\n\n".join(parts))
     log.info(
         "Cek selesai: %d TLD, %d masalah, %d promo, %s",
-        len(reseller),
+        len(reseller) + gtld_sold,
         len(alerts),
         sum(i.kind == "promo" for i in issues),
         "notifikasi dikirim" if parts else "tidak ada notifikasi",
     )
-    save_state(cfg.state_file, {"reseller": reseller, "issue_keys": issue_keys, "error": None})
+    new_state = {"reseller": reseller, "issue_keys": id_keys, "error": None}
+    if rate is not None:
+        new_state.update(gtld=gtld_to_json(gtld_prices), kurs=rate, gtld_issue_keys=gtld_keys, gtld_error=None)
+    elif gtld_error is not None:
+        # Simpan data gTLD terakhir yang berhasil, supaya perubahannya tetap terdeteksi setelah pulih
+        new_state.update(
+            {k: state[k] for k in ("gtld", "kurs") if k in state}, gtld_issue_keys=gtld_keys, gtld_error=gtld_error
+        )
+    save_state(cfg.state_file, new_state)
 
 
 def run_forever(
@@ -282,6 +394,8 @@ def main() -> None:
             fetch_reseller=lambda: registra.parse_gold_slab(registra.fetch_html()),
             fetch_sell=fetch_sell,
             notify=notify,
+            fetch_gtld=(lambda: gtld.parse_gtld(gtld.fetch_html())) if cfg.gtld_enabled else None,
+            fetch_rate=lambda: kurs.parse_open_er_api(kurs.fetch_rate_payload()),
         )
 
     if args.loop:

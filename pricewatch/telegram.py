@@ -7,9 +7,28 @@ class TelegramError(Exception):
     pass
 
 
+def split_lines(text: str, limit: int = MAX_LEN) -> list[str]:
+    # Dipecah di batas baris supaya tag HTML seperti <b> tidak terpotong di tengah;
+    # pesan yang tagnya terpotong ditolak Telegram dan akan gagal terus di setiap run
+    chunks, current = [], ""
+    for line in text.split("\n"):
+        if len(line) > limit:
+            line = line[: limit - 20] + " … (terpotong)"
+        candidate = f"{current}\n{line}" if current else line
+        if len(candidate) > limit:
+            chunks.append(current)
+            candidate = line
+        current = candidate
+    chunks.append(current)
+    return chunks
+
+
 def send_message(token: str, chat_id: str, text: str, thread_id: str | None = None, timeout: float = 30) -> None:
-    if len(text) > MAX_LEN:
-        text = text[: MAX_LEN - 20] + "\n… (terpotong)"
+    for chunk in split_lines(text):
+        _send(token, chat_id, chunk, thread_id, timeout)
+
+
+def _send(token: str, chat_id: str, text: str, thread_id: str | None, timeout: float) -> None:
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
     if thread_id:
         # Tanpa message_thread_id, pesan di grup forum masuk ke topik General

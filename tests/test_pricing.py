@@ -36,3 +36,15 @@ def test_harga_jual_ppn_bisa_diganti():
 
 def test_modal_termasuk_ppn_tanpa_pembulatan():
     assert modal(45_000, PPN) == Decimal("49950")
+
+
+def test_harga_jual_gtld_dibulatkan_ke_atas_500():
+    # .top USD 6,35 × kurs 18.000 = 114.300 → × 1,14 = 130.302 → 130.500
+    base = Decimal("6.35") * 18_000
+    assert harga_jual(base, PPN, MARGIN, round_to=500) == 130_500
+
+
+def test_harga_jual_gtld_pas_kelipatan_500_tidak_naik():
+    # .net USD 11,93 × 18.000 × 1,14 = 244.803,6 → 245.000; 245.000 sendiri tidak naik lagi
+    assert harga_jual(Decimal("11.93") * 18_000, PPN, MARGIN, round_to=500) == 245_000
+    assert harga_jual(Decimal("250000") / Decimal("1.14"), PPN, MARGIN, round_to=500) == 250_000
