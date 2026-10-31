@@ -1,0 +1,9 @@
+# Salin ke compose.override.yaml (tidak masuk git), lalu ganti host dan IP-nya.
+# Docker Compose menggabungkan file itu dengan compose.yaml secara otomatis.
+#
+# Dipakai kalau WHMCS ada di belakang Cloudflare dan request API dari server ini sering diblokir
+# atau dibalas 502. Container lalu menghubungi IP origin langsung, sama seperti entri /etc/hosts di host.
+services:
+  pricewatch:
+    extra_hosts:
+      - "billing.domainanda.com:203.0.113.10"

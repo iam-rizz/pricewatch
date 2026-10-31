@@ -7,6 +7,8 @@ Semua perubahan dirilis pada 20 Oktober 2026. Nomor dalam kurung adalah pull req
 - Harga jual di atas rumus tidak lagi dilaporkan sebagai 🟡. Yang dilaporkan hanya harga di bawah rumus
   (🟡) atau di bawah modal (🔴 RUGI). Item `PROMO` yang harganya di atas rumus dianggap promonya sudah
   selesai (ℹ️).
+- Contoh `compose.override.example.yaml` untuk mengarahkan container langsung ke IP origin WHMCS yang ada
+  di belakang Cloudflare.
 
 ## Domain gTLD
 

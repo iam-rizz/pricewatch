@@ -54,6 +54,7 @@ Contoh gTLD dengan kurs 18.056 per USD (20 Oktober 2026):
 - [Operasional](#operasional)
 - [Konfigurasi](#konfigurasi)
 - [Troubleshooting](#troubleshooting)
+  - [WHMCS di belakang Cloudflare](#whmcs-di-belakang-cloudflare)
 - [Tanpa Docker](#tanpa-docker)
 - [Development](#development)
 
@@ -358,6 +359,7 @@ Opsi CLI:
 | 🚨 `WhmcsError: ... permission` | Role API belum mencentang `GetTLDPricing` |
 | 🚨 `WhmcsError: HTTP 404 ... (bukan JSON WHMCS)` | `WHMCS_API_URL` salah. Alamatnya harus diakhiri `/includes/api.php` |
 | 🚨 `WhmcsError: HTTP 403 ... (bukan JSON WHMCS)` | Request diblokir sebelum sampai ke WHMCS, biasanya oleh firewall atau WAF |
+| 🚨 `WhmcsError: HTTP 502 ... (bukan JSON WHMCS)` atau `Connection reset by peer` | WHMCS di belakang Cloudflare dan request API diputus. Arahkan container langsung ke IP origin, lihat [WHMCS di belakang Cloudflare](#whmcs-di-belakang-cloudflare). Kalau tetap di-reset, whitelist IP server di WAF hosting (ModSecurity/Imunify360) dan hapus IP dari *Banned IPs* WHMCS |
 | 🚨 `ScrapeError: ...` | Struktur halaman digitalregistra berubah. Parser di `pricewatch/registra.py` (domain .id) atau `pricewatch/gtld.py` (gTLD) perlu disesuaikan |
 | 🚨 *Pengecekan harga gTLD gagal* dengan `KursError` atau error koneksi ke open.er-api.com | Layanan kurs sedang bermasalah. Domain .id tetap dicek seperti biasa, dan gTLD dicoba lagi di jadwal berikutnya. Kalau berlangsung lama, matikan sementara dengan `GTLD_ENABLED=false` |
 | `--test-telegram` error `chat not found` | `TELEGRAM_CHAT_ID` salah, bot belum pernah di-chat, atau bot belum masuk grup |
@@ -369,6 +371,25 @@ Opsi CLI:
 | Harga gTLD di pesan berbeda dengan halaman promo digitalregistra | Pricewatch memakai tabel harga gTLD, yang kadang berbeda dengan halaman promo. Cek harga di panel reseller. Lihat [Domain gTLD dan kurs](#domain-gtld-dan-kurs) |
 | Hampir semua gTLD 🟡 dengan selisih kecil | Harga WHMCS dihitung dengan kurs lama. Sesuaikan harga di WHMCS, atau bulatkan kurs dengan `USD_RATE_ROUND_TO` |
 | `docker compose pull` ditolak (denied) | Package GHCR masih private. Ubah jadi public di GitHub, atau build sendiri dengan `--build` |
+
+### WHMCS di belakang Cloudflare
+
+Kalau WHMCS memakai Cloudflare, request API dari server bisa diblokir atau dibalas 502. Pricewatch bisa
+menghubungi IP origin langsung tanpa lewat Cloudflare. Salin contoh override, lalu isi host dan IP origin:
+
+```bash
+cp compose.override.example.yaml compose.override.yaml
+nano compose.override.yaml   # contoh: "billing.domainanda.com:203.0.113.10"
+docker compose up -d
+```
+
+`compose.override.yaml` tidak masuk git, jadi IP origin tidak ikut ter-commit. Untuk cek, jalankan
+`docker compose exec pricewatch getent hosts billing.domainanda.com` dan pastikan IP yang muncul adalah
+IP origin. Sertifikat HTTPS di origin harus valid untuk nama domainnya (misalnya Let's Encrypt), bukan
+Cloudflare Origin Certificate, karena sertifikat itu tidak dipercaya di luar Cloudflare.
+
+Jangan mengetes endpoint API tanpa kredensial. WHMCS mencatatnya sebagai login gagal dan bisa memblokir
+IP server setelah beberapa kali percobaan.
 
 ## Tanpa Docker
 
