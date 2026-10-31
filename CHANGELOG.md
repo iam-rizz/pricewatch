@@ -7,6 +7,8 @@ Semua perubahan dirilis pada 20 Oktober 2026. Nomor dalam kurung adalah pull req
 - Harga jual di atas rumus tidak lagi dilaporkan sebagai 🟡. Yang dilaporkan hanya harga di bawah rumus
   (🟡) atau di bawah modal (🔴 RUGI). Item `PROMO` yang harganya di atas rumus dianggap promonya sudah
   selesai (ℹ️).
+- Request ke API WHMCS memakai User-Agent Pricewatch, bukan `python-requests`. Sebagian hosting memutus
+  koneksi dari User-Agent `python-requests` tanpa log, dan lewat Cloudflare terlihat sebagai HTTP 502.
 
 ## Domain gTLD
 

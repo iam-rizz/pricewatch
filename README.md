@@ -358,6 +358,7 @@ Opsi CLI:
 | 🚨 `WhmcsError: ... permission` | Role API belum mencentang `GetTLDPricing` |
 | 🚨 `WhmcsError: HTTP 404 ... (bukan JSON WHMCS)` | `WHMCS_API_URL` salah. Alamatnya harus diakhiri `/includes/api.php` |
 | 🚨 `WhmcsError: HTTP 403 ... (bukan JSON WHMCS)` | Request diblokir sebelum sampai ke WHMCS, biasanya oleh firewall atau WAF |
+| 🚨 `WhmcsError: HTTP 502 ... (bukan JSON WHMCS)` atau `Connection reset by peer` | Server WHMCS memutus koneksi sebelum membalas. Pricewatch sudah memakai User-Agent sendiri karena sebagian hosting memblokir `python-requests`. Kalau masih terjadi, cek firewall hosting dan *Banned IPs* di WHMCS. Untuk mengetes, selalu pakai kredensial: request API tanpa kredensial dicatat sebagai login gagal dan IP bisa diblokir |
 | 🚨 `ScrapeError: ...` | Struktur halaman digitalregistra berubah. Parser di `pricewatch/registra.py` (domain .id) atau `pricewatch/gtld.py` (gTLD) perlu disesuaikan |
 | 🚨 *Pengecekan harga gTLD gagal* dengan `KursError` atau error koneksi ke open.er-api.com | Layanan kurs sedang bermasalah. Domain .id tetap dicek seperti biasa, dan gTLD dicoba lagi di jadwal berikutnya. Kalau berlangsung lama, matikan sementara dengan `GTLD_ENABLED=false` |
 | `--test-telegram` error `chat not found` | `TELEGRAM_CHAT_ID` salah, bot belum pernah di-chat, atau bot belum masuk grup |

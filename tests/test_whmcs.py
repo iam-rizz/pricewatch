@@ -1,6 +1,7 @@
 import pytest
 
 from pricewatch import whmcs
+from pricewatch.registra import USER_AGENT
 from pricewatch.whmcs import WhmcsError, parse_tld_pricing
 
 SAMPLE = {
@@ -69,3 +70,17 @@ def test_fetch_403_bukan_json_lempar_whmcs_error_dengan_status(monkeypatch):
     )
     with pytest.raises(WhmcsError, match="HTTP 403.*Access denied"):
         whmcs.fetch_tld_pricing("https://x/includes/api.php", "id", "secret")
+
+
+def test_fetch_kirim_user_agent_pricewatch(monkeypatch):
+    # Sebagian hosting memutus koneksi dari User-Agent python-requests tanpa log apa pun
+    sent = {}
+
+    def fake_post(*a, **k):
+        sent.update(k)
+        return FakeResponse(200, SAMPLE)
+
+    monkeypatch.setattr(whmcs.requests, "post", fake_post)
+    whmcs.fetch_tld_pricing("https://x/includes/api.php", "id", "secret")
+    assert sent["headers"]["User-Agent"] == USER_AGENT
+    assert "python-requests" not in sent["headers"]["User-Agent"]

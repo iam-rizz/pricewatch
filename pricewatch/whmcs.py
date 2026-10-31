@@ -2,6 +2,8 @@ from decimal import Decimal
 
 import requests
 
+from pricewatch.registra import USER_AGENT
+
 ACTIONS = ("register", "renew", "transfer")
 ONE_YEAR = "1"
 
@@ -21,7 +23,9 @@ def fetch_tld_pricing(
     }
     if currency_id:
         data["currencyid"] = currency_id
-    resp = requests.post(api_url, data=data, timeout=timeout)
+    # Sebagian hosting memutus koneksi dari User-Agent python-requests tanpa log apa pun,
+    # dan lewat Cloudflare terlihat sebagai HTTP 502
+    resp = requests.post(api_url, data=data, headers={"User-Agent": USER_AGENT}, timeout=timeout)
     # Untuk Invalid IP atau kredensial salah, WHMCS membalas HTTP 403 berisi JSON.
     # raise_for_status() akan membuang pesan itu, jadi JSON-nya dibaca dulu
     try:
