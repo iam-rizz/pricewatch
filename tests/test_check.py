@@ -12,12 +12,24 @@ def test_harga_sesuai_tidak_ada_issue():
     assert find_issues(reseller, sell, PPN, MARGIN) == []
 
 
-def test_harga_jual_terlalu_mahal_jadi_mismatch():
+def test_harga_jual_di_atas_rumus_tidak_dilaporkan():
     reseller = {"web.id": {"register": 45_000}}
     sell = {"web.id": {"register": 55_000}}
+    assert find_issues(reseller, sell, PPN, MARGIN) == []
+
+
+def test_harga_jual_di_bawah_rumus_jadi_mismatch():
+    reseller = {"web.id": {"register": 45_000}}
+    sell = {"web.id": {"register": 51_000}}
     [issue] = find_issues(reseller, sell, PPN, MARGIN)
     assert issue.kind == "mismatch"
-    assert (issue.tld, issue.action, issue.expected, issue.actual) == ("web.id", "register", 52_000, 55_000)
+    assert (issue.tld, issue.action, issue.expected, issue.actual) == ("web.id", "register", 52_000, 51_000)
+
+
+def test_gtld_di_atas_rumus_tidak_dilaporkan():
+    reseller = {"com": {"renew": Decimal("11.75")}}
+    sell = {"com": {"renew": 260_000}}
+    assert find_issues(reseller, sell, PPN, MARGIN, to_idr=lambda usd: usd * 18_500, round_to=500) == []
 
 
 def test_harga_jual_di_bawah_modal_jadi_rugi():
@@ -94,11 +106,12 @@ def test_promo_kembali_ke_harga_rumus_jadi_promo_ended():
     assert issue.kind == "promo_ended"
 
 
-def test_promo_di_atas_rumus_tetap_mismatch():
+def test_promo_di_atas_rumus_jadi_promo_ended():
+    # Harga sudah tidak di bawah rumus, jadi promo dianggap selesai dan perlu dihapus dari PROMO
     reseller = {"my.id": {"register": 22_000}}
     sell = {"my.id": {"register": 30_000}}
     [issue] = find_issues(reseller, sell, PPN, MARGIN, promo=PROMO)
-    assert issue.kind == "mismatch"
+    assert issue.kind == "promo_ended"
 
 
 def test_promo_hanya_berlaku_untuk_aksi_yang_disebut():

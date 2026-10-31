@@ -97,8 +97,9 @@ def test_kurs_efektif_berubah_dikirim(cfg):
 
 
 def test_kurs_live_bolak_balik_di_batas_hanya_sekali_notif(cfg):
-    # 11,75 × 19.000 × 1,14 = 254.505 → 255.000, sesuai kurs 19.000
-    sell = {**ID_SELL, "com": {"register": 255_000, "renew": 255_000}}
+    # 248.000 sesuai kurs 18.500; di kurs 19.000 seharusnya 255.000 (11,75 × 19.000 × 1,14 = 254.505),
+    # jadi 248.000 di bawah rumus
+    sell = {**ID_SELL, "com": {"register": 248_000, "renew": 248_000}}
     go(cfg, sell=sell, rate="18499.9")
     assert len(go(cfg, sell=sell, rate="18500.1")) == 1  # naik ke 19.000
     for live in ("18499.9", "18500.1", "18499.9"):
@@ -156,7 +157,7 @@ def test_tanpa_gtld_perilaku_lama(tmp_path):
     cfg = Config(ppn=Decimal("11"), margin=Decimal("3"), state_file=tmp_path / "state.json")
     sent = []
     run(cfg, fetch_reseller=lambda: ID_RESELLER, fetch_sell=lambda: SELL_OK, notify=sent.append)
-    assert sent == ["✅ Semua harga jual (1 TLD) sudah sesuai rumus."]
+    assert sent == ["✅ Semua harga jual (1 TLD) sudah sesuai atau di atas rumus."]
     state = json.loads(cfg.state_file.read_text())
     assert "gtld" not in state and "kurs" not in state
 

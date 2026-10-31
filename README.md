@@ -6,7 +6,8 @@ Pricewatch mengambil harga reseller dari digitalregistra, lalu mencocokkannya de
 WHMCS Anda. Ada dua sumber harga: kolom Gold Slab di
 [harga domain Indonesia](https://www.digitalregistra.co.id/harga-domain-indonesia/) dalam Rupiah, dan
 [harga gTLD](https://www.digitalregistra.co.id/harga-gtld/) dalam USD. Kalau harga reseller berubah atau
-harga jual tidak sesuai rumus, Pricewatch mengirim pesan ke Telegram.
+harga jual di bawah rumus, Pricewatch mengirim pesan ke Telegram. Harga jual di atas rumus dianggap
+disengaja dan tidak dilaporkan.
 
 ```
 harga jual = ROUNDUP(reseller × (1 + PPN + margin), ke ribuan)
@@ -89,9 +90,8 @@ PROMO=my.id:register,biz.id:register
 ```
 
 Selama harga jualnya di bawah harga rumus, item itu masuk ke bagian 🏷️ Promo dan perubahan harga
-promonya tidak memicu notifikasi. Begitu harganya kembali sesuai rumus, Pricewatch mengirim pengingat
-sekali untuk menghapusnya dari `PROMO`. Kalau harganya malah di atas rumus, item itu tetap dilaporkan
-sebagai 🟡. Aksi lain di TLD yang sama, misalnya renew .my.id, tetap dicek seperti biasa.
+promonya tidak memicu notifikasi. Begitu harganya kembali sesuai rumus atau di atasnya, Pricewatch mengirim
+pengingat sekali untuk menghapusnya dari `PROMO`. Aksi lain di TLD yang sama, misalnya renew .my.id, tetap dicek seperti biasa.
 
 ### Domain gTLD dan kurs
 
@@ -138,12 +138,12 @@ Pengecekan gTLD bisa dimatikan dengan `GTLD_ENABLED=false`.
 |---|---|
 | 📢 | Harga reseller naik atau turun, ada TLD baru, atau TLD hilang dari tabel |
 | 🔴 RUGI | Harga jual di bawah modal (reseller + PPN) |
-| 🟡 | Harga jual tidak sama dengan hasil rumus |
+| 🟡 | Harga jual di bawah hasil rumus, tapi masih di atas modal. Harga di atas rumus tidak dilaporkan |
 | ⚪ | TLD atau aksi (register, renew, transfer) tidak dijual di WHMCS |
 | 🏷️ | Item di `PROMO` yang dijual di bawah harga rumus. Hanya ditampilkan, tidak memicu notifikasi sendiri |
-| ℹ️ | Item di `PROMO` yang harganya sudah kembali sesuai rumus. Dikirim sekali sebagai pengingat untuk menghapusnya dari `PROMO` |
+| ℹ️ | Item di `PROMO` yang harganya sudah kembali sesuai rumus atau di atasnya. Dikirim sekali sebagai pengingat untuk menghapusnya dari `PROMO` |
 | 💱 | Kurs USD ke IDR yang dipakai untuk gTLD, termasuk kurs sebelumnya kalau berubah. Muncul di pesan yang memuat gTLD, bukan pemicu notifikasi sendiri |
-| ✅ | Semua harga sesuai. Dikirim saat run pertama dan saat masalah sebelumnya sudah beres |
+| ✅ | Semua harga sesuai atau di atas rumus. Dikirim saat run pertama dan saat masalah sebelumnya sudah beres |
 | 🚨 | Pengambilan data gagal, misalnya struktur tabel digitalregistra berubah, open.er-api.com tidak bisa dihubungi, atau kredensial WHMCS salah |
 
 Register, renew, dan transfer dengan status dan harga yang sama ditulis dalam satu baris. Pesan yang

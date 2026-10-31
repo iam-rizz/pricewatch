@@ -298,7 +298,7 @@ def run(
     if gtld_changes:
         parts.append(format_changes(gtld_changes, title="Harga reseller gTLD digitalregistra berubah", money=usd))
     # Perubahan kurs saja tidak memicu notifikasi: kurs live bergerak setiap hari. Notifikasi dikirim
-    # kalau status harga ikut berubah, misalnya harga yang tadinya sesuai jadi tidak sesuai rumus
+    # kalau status harga ikut berubah, misalnya harga yang tadinya sesuai jadi di bawah rumus
     if first_run or changes or gtld_changes or keys_changed:
         if rate is not None:
             scope = f"{len(reseller)} TLD .id, {gtld_sold} gTLD"
@@ -309,9 +309,9 @@ def run(
         if alerts:
             parts.append(format_issues(alerts))
         elif any(i.kind == "promo" for i in issues):
-            parts.append(f"✅ Semua harga jual ({scope}) sudah sesuai rumus, kecuali promo di bawah.")
+            parts.append(f"✅ Semua harga jual ({scope}) sudah sesuai atau di atas rumus, kecuali promo di bawah.")
         else:
-            parts.append(f"✅ Semua harga jual ({scope}) sudah sesuai rumus.")
+            parts.append(f"✅ Semua harga jual ({scope}) sudah sesuai atau di atas rumus.")
         promo_text = format_promo(issues)
         if promo_text:
             parts.append(promo_text)
