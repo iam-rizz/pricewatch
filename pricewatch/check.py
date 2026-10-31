@@ -59,12 +59,13 @@ def find_issues(
             actual = sell.get(tld, {}).get(action)
             if actual is None:
                 kind = "missing"
-            elif (tld, action) in promo and actual <= expected:
-                # Di bawah rumus berarti promo masih jalan; sama dengan rumus berarti promo sudah selesai
+            elif (tld, action) in promo:
+                # Di bawah rumus berarti promo masih jalan; sama atau di atas rumus berarti promo sudah selesai
                 kind = "promo" if actual < expected else "promo_ended"
             elif actual < cost:
                 kind = "loss"
-            elif actual != expected:
+            elif actual < expected:
+                # Harga di atas rumus disengaja (margin lebih besar), jadi hanya harga di bawah rumus yang dilaporkan
                 kind = "mismatch"
             else:
                 continue

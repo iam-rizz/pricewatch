@@ -2,6 +2,12 @@
 
 Semua perubahan dirilis pada 20 Oktober 2026. Nomor dalam kurung adalah pull request di GitHub.
 
+## Belum dirilis
+
+- Harga jual di atas rumus tidak lagi dilaporkan sebagai 🟡. Yang dilaporkan hanya harga di bawah rumus
+  (🟡) atau di bawah modal (🔴 RUGI). Item `PROMO` yang harganya di atas rumus dianggap promonya sudah
+  selesai (ℹ️).
+
 ## Domain gTLD
 
 - Kurs gTLD mengikuti kurs live secara default (`USD_RATE_ROUND_TO=1`). Perubahan kurs saja tidak lagi
